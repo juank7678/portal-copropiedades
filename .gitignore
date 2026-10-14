@@ -6,4 +6,5 @@ dist/
 .env
 .env.*
 aplicativoCarlos.txt
+CONFIGURACION-INICIAL.txt
 .claude/

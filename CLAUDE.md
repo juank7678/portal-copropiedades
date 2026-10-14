@@ -14,9 +14,11 @@ con backend Supabase. Todas las descargas son PDF (`src/lib/pdf.js`, cargado baj
 - Variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` (`.env.local` en local; en el workflow de GitHub Actions).
 
 ## Estado (2026-10-14)
-Código completo y compilando. PENDIENTE: el proyecto Supabase vive en la cuenta juank7678pptt@gmail.com (organización
-distinta a la del conector anterior). Pasos que faltan:
-1. Con el conector de Supabase con acceso a esa organización: aplicar la migración, desplegar la función `usuarios`
-   (verify_jwt false), generar el código inicial y guardar su hash, crear `.env.local` y poner las variables en el workflow.
-2. Probar el flujo completo (registro, admin, técnico, PDFs) y revisar `get_advisors` (security).
-3. Commit + push (despliega a GitHub Pages). Recomendar al usuario desactivar "Allow new users to sign up" en Auth.
+Supabase: proyecto `portal-copropiedades` (ref `gfmzotkzubbgsqzhkmic`, org "Juan Carlos Guerrero" de
+juank7678pptt@gmail.com; el conector de Supabase se autorizó para esa org). Migración `init` aplicada, función `usuarios`
+desplegada (verify_jwt false), variables en `.env.local` y en el workflow.
+Flujo completo probado en local (admin inicial, técnico con foto, registro, asignación, visita con foto, los 4 PDF,
+permisos de técnico y anónimo) y datos de prueba borrados. El código inicial vigente está en `CONFIGURACION-INICIAL.txt`
+(ignorado por git); si se consume en pruebas, regenerar el hash en `ajustes_privados`.
+Avisos de `get_advisors` revisados: son intencionales (RPC públicas que validan por dentro, `ajustes_privados` sin políticas).
+Pendiente del usuario: desactivar "Allow new users to sign up" en Auth y crear el admin real con el código.

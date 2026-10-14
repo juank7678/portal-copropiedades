@@ -9,7 +9,11 @@ export default function Login({ errorInicial }) {
   const [enviando, setEnviando] = useState(false);
 
   useEffect(() => {
-    llamarUsuarios("estado").then(setEstado).catch(() => setEstado({ hay_admin: true }));
+    // Un reintento: la primera llamada a la función puede fallar mientras arranca en frío
+    llamarUsuarios("estado")
+      .catch(() => new Promise((r) => setTimeout(r, 1500)).then(() => llamarUsuarios("estado")))
+      .then(setEstado)
+      .catch(() => setEstado({ hay_admin: true }));
   }, []);
 
   const entrar = async (e) => {
@@ -59,7 +63,7 @@ function ConfiguracionInicial({ onListo }) {
     setEnviando(true);
     try {
       await llamarUsuarios("crear_admin_inicial", {
-        codigo: form.codigo.trim(), nombre: form.nombre, usuario: form.usuario.trim().toLowerCase(), password: form.password,
+        codigo: form.codigo.trim().toUpperCase(), nombre: form.nombre, usuario: form.usuario.trim().toLowerCase(), password: form.password,
       });
       const { error: err } = await supabase.auth.signInWithPassword({ email: usuarioAEmail(form.usuario), password: form.password });
       if (err) throw err;

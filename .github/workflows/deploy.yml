@@ -25,6 +25,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+        env:
+          # Valores públicos (la clave publicable está pensada para el navegador; RLS protege los datos)
+          VITE_SUPABASE_URL: https://gfmzotkzubbgsqzhkmic.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_miWJBFx_05DJkpQt1NbaSA_zLdWzbcI
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
