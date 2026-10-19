@@ -1,19 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
 import { imagenComoDataUrl, llamarUsuarios, mensajeError, supabase } from "../lib/supabase.js";
 import { descargarPdf } from "../lib/descargar.js";
-import { cop, dataUrlABlob, fechaCO, fotoCuadrada, numeroCot, recorteCircular } from "../lib/util.js";
+import { cop, dataUrlABlob, estadoCotizacion, fechaCO, fotoCuadrada, numeroCot, recorteCircular, textoWhatsApp } from "../lib/util.js";
 import {
   btnDanger, btnGhost, btnGhostLink, btnPrimary, card, disabled, errorText, fieldLabel, fila, input, muted, okText, smallLabel,
 } from "../styles.js";
 import { TablaLineas } from "./PanelTecnico.jsx";
+import { EstadoBadge, descargarEntrega, fotosDe } from "./Entrega.jsx";
+import { CuentasCobro, DatosEmisor } from "./Cobros.jsx";
 
 const firmar = async (bucket, paths) => {
   if (!paths.length) return {};
   const { data } = await supabase.storage.from(bucket).createSignedUrls(paths, 3600);
   return Object.fromEntries((data || []).filter((d) => d.signedUrl).map((d) => [d.path, d.signedUrl]));
 };
-
-const textoWhatsApp = (cel) => `https://wa.me/57${cel.replace(/\D/g, "").replace(/^57(?=\d{10}$)/, "")}`;
 
 export default function PanelAdmin() {
   const [tecnicos, setTecnicos] = useState([]);
@@ -47,6 +47,7 @@ export default function PanelAdmin() {
         onVer={(id) => setSeleccionId(id)} />
       {seleccion && <Historial seleccion={seleccion} tecnicos={tecnicos} onCerrar={() => setSeleccionId(null)} />}
       <Precios />
+      <DatosEmisor />
     </div>
   );
 }
@@ -236,7 +237,7 @@ function DirectorioTecnicos({ tecnicos, fotosTec, recargar }) {
 
 // ---------- Copropiedades ----------
 const CAMPOS_COP = [
-  ["nombre", "Nombre"], ["administrador", "Administrador"], ["direccion", "Dirección"],
+  ["nombre", "Nombre"], ["nit", "NIT"], ["administrador", "Administrador"], ["direccion", "Dirección"],
   ["email", "Correo"], ["cel_admin", "Celular administrador"], ["tel_porteria", "Teléfono portería"],
 ];
 
@@ -275,11 +276,14 @@ function Copropiedades({ copropiedades, tecnicos, recargar, onVer }) {
   });
 
   const eliminar = (c) => {
-    if (!window.confirm(`¿Eliminar ${c.nombre} (${c.anio}) con todas sus visitas, fotos y cotizaciones? Esta acción no se puede deshacer.`)) return;
+    if (!window.confirm(`¿Eliminar ${c.nombre} (${c.anio}) con todas sus visitas, fotos, cotizaciones, entregas y cuentas de cobro? Esta acción no se puede deshacer.`)) return;
     ejecutar(c.id, async () => {
-      const { data, error: err } = await supabase.from("cotizaciones").select("fotos").eq("copropiedad_id", c.id);
-      if (err) throw err;
-      await borrarFotos(data.flatMap((q) => q.fotos));
+      const [q, e] = await Promise.all([
+        supabase.from("cotizaciones").select("fotos").eq("copropiedad_id", c.id),
+        supabase.from("entregas").select("fotos").eq("copropiedad_id", c.id),
+      ]);
+      if (q.error || e.error) throw q.error || e.error;
+      await borrarFotos([...q.data, ...e.data].flatMap((x) => x.fotos));
       const { error: err2 } = await supabase.from("copropiedades").delete().eq("id", c.id);
       if (err2) throw err2;
     });
@@ -357,6 +361,8 @@ function Copropiedades({ copropiedades, tecnicos, recargar, onVer }) {
 function Historial({ seleccion, tecnicos, onCerrar }) {
   const [historial, setHistorial] = useState(null);
   const [clientes, setClientes] = useState({});
+  const [entregas, setEntregas] = useState({});
+  const [cuentas, setCuentas] = useState([]);
   const [abiertoId, setAbiertoId] = useState(null);
   const [miniaturas, setMiniaturas] = useState({});
   const [error, setError] = useState("");
@@ -366,10 +372,17 @@ function Historial({ seleccion, tecnicos, onCerrar }) {
     const { data, error: err } = await supabase.from("cotizaciones").select("*").eq("copropiedad_id", seleccion.id).order("creado_en", { ascending: false });
     if (err) { setError(mensajeError(err)); return; }
     const ids = data.map((d) => d.id);
-    const cli = ids.length ? await supabase.from("cotizaciones_cliente").select("*").in("cotizacion_id", ids) : { data: [] };
-    if (cli.error) { setError(mensajeError(cli.error)); return; }
+    const [cli, ent, cc] = await Promise.all([
+      ids.length ? supabase.from("cotizaciones_cliente").select("*").in("cotizacion_id", ids) : { data: [] },
+      supabase.from("entregas").select("*").eq("copropiedad_id", seleccion.id),
+      supabase.from("cuentas_cobro").select("*").eq("copropiedad_id", seleccion.id).order("numero", { ascending: false }),
+    ]);
+    const err2 = cli.error || ent.error || cc.error;
+    if (err2) { setError(mensajeError(err2)); return; }
     setHistorial(data);
     setClientes(Object.fromEntries(cli.data.map((x) => [x.cotizacion_id, x])));
+    setEntregas(Object.fromEntries(ent.data.map((x) => [x.cotizacion_id, x])));
+    setCuentas(cc.data);
   }, [seleccion.id]);
 
   useEffect(() => { setHistorial(null); setAbiertoId(null); cargar(); }, [cargar]);
@@ -378,12 +391,12 @@ function Historial({ seleccion, tecnicos, onCerrar }) {
     const nuevo = abiertoId === h.id ? null : h.id;
     setAbiertoId(nuevo);
     if (nuevo) {
-      const urls = await firmar("visitas", h.fotos);
+      const urls = await firmar("visitas", [...h.fotos, ...(entregas[h.id]?.fotos || [])]);
       setMiniaturas((m) => ({ ...m, ...urls }));
     }
   };
 
-  const conFotos = async (h) => Promise.all(h.fotos.map(async (p) => ({ dataUrl: await imagenComoDataUrl("visitas", p) })));
+  const conFotos = (h) => fotosDe(h.fotos);
 
   const accion = async (id, fn) => {
     setOcupado(id);
@@ -397,12 +410,35 @@ function Historial({ seleccion, tecnicos, onCerrar }) {
   const pdfTecnico = (h) => accion(h.id, async () => {
     await descargarPdf("pdfCotizacionTecnico", h, await conFotos(h));
   });
+  const aprobar = (h, aprobada) => accion(h.id, async () => {
+    const { error: err } = await supabase.rpc("aprobar_cotizacion", { p_id: h.id, p_aprobada: aprobada });
+    if (err) throw err;
+    await cargar();
+  });
+
+  // Se borra primero la fila: si los permisos no lo permiten, no se pierden las fotos
+  const borrarFila = async (tabla, id) => {
+    const { data, error: err } = await supabase.from(tabla).delete().eq("id", id).select("id");
+    if (err) throw err;
+    if (!data.length) throw new Error("No se pudo eliminar: el registro ya está incluido en una cuenta de cobro.");
+  };
+
   const eliminar = (h) => {
-    if (!window.confirm(`¿Eliminar la cotización N.° ${numeroCot(h.numero)} con sus fotos? Esta acción no se puede deshacer.`)) return;
+    if (h.cuenta_cobro_id) { setError("Esta cotización ya está en una cuenta de cobro. Anula la cuenta primero."); return; }
+    if (!window.confirm(`¿Eliminar la cotización N.° ${numeroCot(h.numero)} con sus fotos${entregas[h.id] ? " y su entrega" : ""}? Esta acción no se puede deshacer.`)) return;
     accion(h.id, async () => {
-      await borrarFotos(h.fotos);
-      const { error: err } = await supabase.from("cotizaciones").delete().eq("id", h.id);
-      if (err) throw err;
+      await borrarFila("cotizaciones", h.id);
+      await borrarFotos([...h.fotos, ...(entregas[h.id]?.fotos || [])]);
+      await cargar();
+    });
+  };
+
+  const eliminarEntrega = (h) => {
+    const ent = entregas[h.id];
+    if (!window.confirm(`¿Eliminar la entrega N.° ${numeroCot(ent.numero)} con sus fotos? El técnico podrá registrarla de nuevo.`)) return;
+    accion(h.id, async () => {
+      await borrarFila("entregas", ent.id);
+      await borrarFotos(ent.fotos);
       await cargar();
     });
   };
@@ -421,12 +457,17 @@ function Historial({ seleccion, tecnicos, onCerrar }) {
       {error && <p style={errorText}>{error}</p>}
       {!historial ? <p>Cargando…</p> : historial.length === 0 ? <p>Sin visitas registradas.</p> : historial.map((h) => {
         const cli = clientes[h.id];
+        const ent = entregas[h.id];
+        const estado = estadoCotizacion(h, ent, cuentas.find((c) => c.id === h.cuenta_cobro_id));
         return (
           <div key={h.id} style={{ padding: "8px 0", borderBottom: "1px dashed #eee" }}>
-            <button type="button" onClick={() => abrir(h)}
-              style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 13, textAlign: "left", width: "100%", color: "#1f2a24" }}>
-              {abiertoId === h.id ? "▾" : "▸"} N.° {numeroCot(h.numero)} · {fechaCO(h.creado_en)} · {h.tecnico_nombre} · Torre {h.torre}/Piso {h.piso} · Cliente: {cli ? cop(cli.total_cliente) : "—"} · Técnico: {cop(h.total_tecnico)}
-            </button>
+            <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <button type="button" onClick={() => abrir(h)}
+                style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 13, textAlign: "left", flex: 1, color: "#1f2a24" }}>
+                {abiertoId === h.id ? "▾" : "▸"} N.° {numeroCot(h.numero)} · {fechaCO(h.creado_en)} · {h.tecnico_nombre} · Torre {h.torre}/Piso {h.piso} · Cliente: {cli ? cop(cli.total_cliente) : "—"} · Técnico: {cop(h.total_tecnico)}
+              </button>
+              <EstadoBadge estado={estado} />
+            </div>
             {abiertoId === h.id && (
               <div style={{ marginTop: 8, background: "#f8f9f7", borderRadius: 8, padding: 10 }}>
                 <p style={{ fontSize: 12, fontWeight: 700, margin: "0 0 6px" }}>Informe de visita</p>
@@ -457,14 +498,46 @@ function Historial({ seleccion, tecnicos, onCerrar }) {
                       Abrir WhatsApp
                     </a>
                   )}
-                  <button type="button" style={btnDanger} disabled={ocupado === h.id} onClick={() => eliminar(h)}>Eliminar</button>
+                  {estado === "cotizada" && (
+                    <button type="button" style={{ ...btnGhost, background: "#1f2a24", color: "#fff", ...disabled(ocupado === h.id) }} disabled={ocupado === h.id} onClick={() => aprobar(h, true)}>Marcar aprobada</button>
+                  )}
+                  {estado === "aprobada" && (
+                    <button type="button" style={{ ...btnGhost, ...disabled(ocupado === h.id) }} disabled={ocupado === h.id} onClick={() => aprobar(h, false)}>Quitar aprobación</button>
+                  )}
+                  {!h.cuenta_cobro_id && (
+                    <button type="button" style={{ ...btnDanger, ...disabled(ocupado === h.id) }} disabled={ocupado === h.id} onClick={() => eliminar(h)}>Eliminar</button>
+                  )}
                 </div>
                 <p style={{ ...muted, fontSize: 11, marginBottom: 0 }}>Descarga el PDF y adjúntalo al correo o al chat de WhatsApp.</p>
+                {estado === "aprobada" && <p style={{ ...muted, fontSize: 11, margin: "4px 0 0" }}>Aprobada el {fechaCO(h.aprobada_en)}. El técnico ya puede registrar la entrega desde "Mis visitas".</p>}
+
+                {ent && (
+                  <div style={{ marginTop: 12, borderTop: "1px solid #e2e5e1", paddingTop: 10 }}>
+                    <p style={{ fontSize: 12, fontWeight: 700, margin: "0 0 4px" }}>Entrega N.° {numeroCot(ent.numero)} · {fechaCO(ent.fecha_entrega)} · {ent.tecnico_nombre}</p>
+                    {ent.recibido_por && <p style={{ ...muted, fontSize: 12, margin: "0 0 4px" }}>Recibió: {ent.recibido_por}</p>}
+                    {ent.observaciones && <p style={{ fontSize: 12, margin: "0 0 6px", whiteSpace: "pre-line" }}>{ent.observaciones}</p>}
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                      {ent.fotos.map((p) => miniaturas[p]
+                        ? <img key={p} src={miniaturas[p]} alt="Foto de la entrega" style={{ width: 70, height: 70, objectFit: "cover", borderRadius: 6 }} />
+                        : <div key={p} style={{ width: 70, height: 70, borderRadius: 6, background: "#eef0ec" }} />)}
+                    </div>
+                    <div style={fila}>
+                      <button type="button" style={{ ...btnGhost, background: "#c8622f", color: "#fff", ...disabled(ocupado === h.id) }} disabled={ocupado === h.id}
+                        onClick={() => accion(h.id, () => descargarEntrega(h, ent, seleccion))}>Informe de entrega (PDF)</button>
+                      {!h.cuenta_cobro_id && (
+                        <button type="button" style={{ ...btnDanger, ...disabled(ocupado === h.id) }} disabled={ocupado === h.id} onClick={() => eliminarEntrega(h)}>Eliminar entrega</button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
         );
       })}
+      {historial && (
+        <CuentasCobro seleccion={seleccion} historial={historial} entregas={entregas} clientes={clientes} cuentas={cuentas} recargar={cargar} />
+      )}
     </div>
   );
 }

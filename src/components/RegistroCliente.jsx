@@ -3,9 +3,10 @@ import { mensajeError, supabase } from "../lib/supabase.js";
 import { descargarPdf } from "../lib/descargar.js";
 import { btnGhost, btnPrimary, card, disabled, errorText, fieldLabel, input, muted } from "../styles.js";
 
-const VACIO = { nombre: "", administrador: "", direccion: "", email: "", celAdmin: "", telPorteria: "" };
+const VACIO = { nombre: "", nit: "", administrador: "", direccion: "", email: "", celAdmin: "", telPorteria: "" };
 const CAMPOS = [
   ["nombre", "Nombre de la copropiedad", "text"],
+  ["nit", "NIT de la copropiedad (opcional)", "text"],
   ["administrador", "Nombre del administrador", "text"],
   ["direccion", "Dirección física de la copropiedad", "text"],
   ["email", "Correo electrónico", "email"],
@@ -37,7 +38,7 @@ export default function RegistroCliente({ publico = false }) {
     setEnviando(true);
     const { data, error: err } = await supabase.rpc("registrar_copropiedad", {
       p_nombre: form.nombre, p_administrador: form.administrador, p_direccion: form.direccion,
-      p_email: form.email, p_cel_admin: form.celAdmin, p_tel_porteria: form.telPorteria, p_autoriza: autoriza,
+      p_email: form.email, p_cel_admin: form.celAdmin, p_tel_porteria: form.telPorteria, p_autoriza: autoriza, p_nit: form.nit,
     });
     setEnviando(false);
     if (err) { setError(mensajeError(err)); return; }
@@ -69,7 +70,7 @@ export default function RegistroCliente({ publico = false }) {
         <label key={key} style={fieldLabel}>
           {label}
           <input style={{ ...input, textTransform: key === "email" ? "none" : "uppercase" }} type={type} value={form[key]}
-            maxLength={key === "direccion" ? 200 : 150}
+            maxLength={key === "direccion" ? 200 : key === "nit" ? 30 : 150}
             onChange={(e) => setForm({ ...form, [key]: key === "email" ? e.target.value : e.target.value.toUpperCase() })} />
         </label>
       ))}

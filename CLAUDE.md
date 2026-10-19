@@ -10,6 +10,12 @@ con backend Supabase. Todas las descargas son PDF (`src/lib/pdf.js`, cargado baj
 - `supabase/functions/usuarios`: Edge Function (verify_jwt = false, autentica dentro) para crear/gestionar cuentas.
   El admin inicial se crea desde la app con un código de un solo uso cuyo hash va en `ajustes_privados.codigo_inicial_hash`.
 - Login por usuario: se mapea a `usuario@portal.invalid` en Supabase Auth.
+- Flujo de una cotización (estado derivado en `estadoCotizacion`, `src/lib/util.js`): cotizada → aprobada (admin,
+  `aprobar_cotizacion`) → entregada (técnico, `crear_entrega`, tabla `entregas` con fotos "después") → cobrada
+  (admin, `crear_cuenta_cobro`, una cuenta puede agrupar varias cotizaciones) → pagada. Las cuentas de cobro guardan
+  copia de los datos del cliente y del emisor (tabla `emisor`, solo admin); anular conserva el consecutivo.
+- Migración `20261019000000_entregas_y_cobros` aplicada el 2026-10-19 (probada con transacción revertida; secuencias
+  reiniciadas después). Para probar contra el proyecto real, usar transacciones revertidas: ya hay datos reales.
 - Frontend: `src/App.jsx` (rutas por hash: `#/registro` es el formulario público), `src/components/*`.
 - Variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` (`.env.local` en local; en el workflow de GitHub Actions).
 
