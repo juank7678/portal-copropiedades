@@ -2,6 +2,7 @@ import { useState } from "react";
 import { mensajeError, supabase } from "../lib/supabase.js";
 import { descargarPdf } from "../lib/descargar.js";
 import { btnGhost, btnPrimary, card, disabled, errorText, fieldLabel, input, muted } from "../styles.js";
+import { MARCA } from "../lib/marca.js";
 
 const VACIO = { nombre: "", nit: "", administrador: "", direccion: "", email: "", celAdmin: "", telPorteria: "" };
 const CAMPOS = [
@@ -77,8 +78,9 @@ export default function RegistroCliente({ publico = false }) {
       <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12, color: "#4a534d", margin: "4px 0 12px" }}>
         <input type="checkbox" checked={autoriza} onChange={(e) => setAutoriza(e.target.checked)} style={{ marginTop: 2 }} />
         <span>
-          Autorizo el tratamiento de los datos personales aquí suministrados para la gestión del servicio técnico
-          (programación de visitas, cotizaciones y contacto), conforme a la Ley 1581 de 2012.
+          Autorizo a {MARCA.nombre} (NIT {MARCA.nit}) a tratar los datos personales aquí suministrados para la gestión del
+          servicio técnico (programación de visitas, cotizaciones, entregas, cobro y contacto), conforme a la Ley 1581 de 2012.
+          Puedo consultar, actualizar o suprimir mis datos escribiendo a {MARCA.correo} o al {MARCA.telefono}.
         </span>
       </label>
       <button style={{ ...btnPrimary, ...disabled(enviando) }} type="button" onClick={submit} disabled={enviando}>

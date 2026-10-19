@@ -7,6 +7,8 @@ import MisVisitas from "./components/MisVisitas.jsx";
 import PanelAdmin from "./components/PanelAdmin.jsx";
 import CambiarPassword from "./components/CambiarPassword.jsx";
 import { card } from "./styles.js";
+import { LOGO } from "./lib/logo.js";
+import { MARCA } from "./lib/marca.js";
 
 function useHash() {
   const [hash, setHash] = useState(window.location.hash);
@@ -23,7 +25,8 @@ function Marco({ perfil, onSalir, onPassword, tabs, tab, setTab, children }) {
     <div style={{ minHeight: "100vh", background: "#f4f5f3", fontFamily: "'Segoe UI', system-ui, sans-serif", color: "#1f2a24" }}>
       <header style={{ background: "#1f2a24", color: "#f4f5f3", padding: "18px 20px", display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, flexWrap: "wrap" }}>
         <div>
-          <div style={{ fontSize: 12, letterSpacing: 2, opacity: 0.7, textTransform: "uppercase" }}>Servicio técnico · Shuts de basura</div>
+          <img src={LOGO} alt={MARCA.nombre} style={{ height: 28, display: "block", marginBottom: 6 }} />
+          <div style={{ fontSize: 12, letterSpacing: 2, opacity: 0.7, textTransform: "uppercase" }}>{MARCA.servicio}</div>
           <div style={{ fontSize: 22, fontWeight: 700 }}>Portal de copropiedades</div>
         </div>
         {perfil && (

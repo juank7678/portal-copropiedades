@@ -16,6 +16,9 @@ con backend Supabase. Todas las descargas son PDF (`src/lib/pdf.js`, cargado baj
   copia de los datos del cliente y del emisor (tabla `emisor`, solo admin); anular conserva el consecutivo.
 - Migración `20261019000000_entregas_y_cobros` aplicada el 2026-10-19 (probada con transacción revertida; secuencias
   reiniciadas después). Para probar contra el proyecto real, usar transacciones revertidas: ya hay datos reales.
+- Marca del cliente: Cprado2001 (datos en `src/lib/marca.js`; logo transparente como data URL en `src/lib/logo.js`,
+  sacado de una imagen de 186 px, solo para fondos oscuros). Guía de uso para el cliente en Claude Docs:
+  https://claude.ai/code/artifact/0775f080-ec60-47f0-8513-4ad97d2facbc
 - Frontend: `src/App.jsx` (rutas por hash: `#/registro` es el formulario público), `src/components/*`.
 - Variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` (`.env.local` en local; en el workflow de GitHub Actions).
 

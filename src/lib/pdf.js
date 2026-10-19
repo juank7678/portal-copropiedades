@@ -2,6 +2,8 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { cop, enLetras, fechaCO, fechaHoraCO, fechaLargaCO, numeroCot, slug } from "./util.js";
+import { LOGO, LOGO_PROPORCION } from "./logo.js";
+import { MARCA } from "./marca.js";
 
 const C = {
   oscuro: [31, 42, 36],
@@ -15,7 +17,6 @@ const C = {
 };
 const M = 16;            // margen lateral (mm)
 const PIE = 18;          // espacio reservado al pie de página
-const MARCA = "SERVICIO TÉCNICO · SHUTS DE BASURA";
 
 // Las fuentes estándar de PDF solo cubren Latin-1: se normalizan guiones largos, comillas, etc.
 const t = (s) => String(s ?? "")
@@ -36,8 +37,10 @@ function encabezado(doc, { titulo, subtitulo, etiqueta, valor, fecha }) {
   doc.setFillColor(...C.oscuro).rect(0, 0, W, 36, "F");
   doc.setFillColor(...C.acento).rect(0, 36, W, 1.4, "F");
 
-  doc.setFont("helvetica", "bold").setFontSize(7.5).setTextColor(...C.grisClaro);
-  doc.text(t(MARCA), M, 12, { charSpace: 0.5 });
+  const logoH = 7.5, logoW = logoH * LOGO_PROPORCION;
+  doc.addImage(LOGO, "PNG", M, 4.5, logoW, logoH);
+  doc.setFont("helvetica", "bold").setFontSize(7).setTextColor(...C.grisClaro);
+  doc.text(t(MARCA.servicio).toUpperCase(), M + logoW + 4, 10.2, { charSpace: 0.5 });
   doc.setFontSize(19).setTextColor(...C.blanco);
   doc.text(t(titulo), M, 23);
   if (subtitulo) {
@@ -266,7 +269,7 @@ function seccionFotos(doc, y, titulo, fotos) {
 function piePagina(doc) {
   const n = doc.getNumberOfPages();
   const W = ancho(doc), H = alto(doc);
-  const generado = `Portal de copropiedades · Generado el ${fechaHoraCO(new Date())}`;
+  const generado = `${MARCA.nombre} · NIT ${MARCA.nit} · ${MARCA.telefono} · ${MARCA.correo} · Generado el ${fechaHoraCO(new Date())}`;
   for (let i = 1; i <= n; i++) {
     doc.setPage(i);
     doc.setDrawColor(...C.linea).setLineWidth(0.3).line(M, H - 12, W - M, H - 12);
@@ -311,8 +314,9 @@ export function pdfIdentificacion(tec, fotoCircular, copNombre) {
   const W = 100;
   doc.setFillColor(...C.oscuro).rect(0, 0, W, 62, "F");
   doc.setFillColor(...C.acento).rect(0, 62, W, 1.2, "F");
-  doc.setFont("helvetica", "bold").setFontSize(6.5).setTextColor(...C.grisClaro);
-  doc.text(t(MARCA), W / 2, 11, { align: "center", charSpace: 0.4 });
+  doc.setFont("helvetica", "bold");
+  const logoW = 34, logoH = logoW / LOGO_PROPORCION;
+  doc.addImage(LOGO, "PNG", W / 2 - logoW / 2, 4, logoW, logoH);
   doc.setFontSize(11).setTextColor(...C.acento);
   doc.text("TÉCNICO AUTORIZADO", W / 2, 19, { align: "center", charSpace: 0.6 });
   doc.setFont("helvetica", "normal").setFontSize(8.5).setTextColor(...C.blanco);
@@ -345,7 +349,7 @@ export function pdfIdentificacion(tec, fotoCircular, copNombre) {
 
   doc.setFillColor(...C.acento).rect(0, 140, W, 10, "F");
   doc.setFont("helvetica", "normal").setFontSize(7).setTextColor(...C.blanco);
-  doc.text(`Emitida el ${fechaCO(new Date())}`, W / 2, 146, { align: "center" });
+  doc.text(t(`Emitida el ${fechaCO(new Date())} · ${MARCA.nombre} · ${MARCA.telefono}`), W / 2, 146, { align: "center" });
   return { doc, nombre: `identificacion_${slug(tec.nombre)}.pdf` };
 }
 
