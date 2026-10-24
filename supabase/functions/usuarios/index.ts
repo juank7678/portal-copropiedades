@@ -141,7 +141,9 @@ Deno.serve(async (req) => {
       case "eliminar_tecnico": {
         await exigirAdmin(req);
         const id = await perfilTecnico(body.id);
-        await admin.storage.from("tecnicos").remove([`${id}.jpg`]);
+        // La foto actual tiene nombre con marca de tiempo; `${id}.jpg` es el nombre que usaban las primeras fotos
+        const { data: p } = await admin.from("perfiles").select("foto_path").eq("id", id).maybeSingle();
+        await admin.storage.from("tecnicos").remove([`${id}.jpg`, ...(p?.foto_path ? [p.foto_path] : [])]);
         const { error } = await admin.auth.admin.deleteUser(id);
         if (error) throw new ErrorApp(400, error.message);
         return json(200, { ok: true });

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { imagenComoDataUrl, mensajeError, supabase } from "../lib/supabase.js";
 import { descargarPdf } from "../lib/descargar.js";
-import { ESTADOS, PISOS, dataUrlABlob, fechaCO, fechaISO, numeroCot, tagPhoto } from "../lib/util.js";
+import { ESTADOS, PISOS, TORRES, dataUrlABlob, fechaCO, fechaISO, numeroCot, tagPhoto } from "../lib/util.js";
 import { btnGhost, btnPrimary, disabled, errorText, input, muted, smallLabel } from "../styles.js";
 
 export const MAX_FOTOS_ENTREGA = 4;
@@ -79,7 +79,7 @@ export function RegistrarEntrega({ cot, onListo, onCancelar }) {
       <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
         <label style={smallLabel}>Torre
           <select style={{ ...input, width: 64, padding: 6, marginTop: 2 }} value={torre} onChange={(e) => setTorre(Number(e.target.value))}>
-            {PISOS.map((n) => <option key={n} value={n}>{n}</option>)}
+            {TORRES.map((n) => <option key={n} value={n}>{n}</option>)}
           </select>
         </label>
         <label style={smallLabel}>Piso

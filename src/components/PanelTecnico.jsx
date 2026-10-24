@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { mensajeError, supabase } from "../lib/supabase.js";
 import { descargarPdf } from "../lib/descargar.js";
-import { PISOS, agruparPorTorre, agruparRociadores, cop, dataUrlABlob, fechaCO, numeroCot, tagPhoto } from "../lib/util.js";
+import { PISOS, TORRES, agruparPorTorre, agruparRociadores, cop, dataUrlABlob, fechaCO, numeroCot, tagPhoto } from "../lib/util.js";
 import { btnGhost, btnPrimary, card, disabled, errorText, fieldLabel, input, muted } from "../styles.js";
 
 function crearItemsIniciales(precios) {
@@ -25,7 +25,7 @@ export default function PanelTecnico({ perfil }) {
 
   const [copId, setCopId] = useState("");
   const [torre, setTorre] = useState(1);
-  const [piso, setPiso] = useState(1);
+  const [piso, setPiso] = useState(PISOS[0]);
   const [fotos, setFotos] = useState([]);
   const [items, setItems] = useState({});
   const [danoSevero, setDanoSevero] = useState("");
@@ -182,7 +182,7 @@ export default function PanelTecnico({ perfil }) {
       setDanoSevero("");
       setCopId("");
       setTorre(1);
-      setPiso(1);
+      setPiso(PISOS[0]);
     }} />
   );
 
@@ -222,7 +222,7 @@ export default function PanelTecnico({ perfil }) {
             <div style={{ display: "flex", gap: 10 }}>
               <label style={{ ...fieldLabel, flex: 1 }}>Torre
                 <select style={input} value={torre} onChange={(e) => setTorre(Number(e.target.value))}>
-                  {PISOS.map((n) => <option key={n} value={n}>{n}</option>)}
+                  {TORRES.map((n) => <option key={n} value={n}>{n}</option>)}
                 </select>
               </label>
               <label style={{ ...fieldLabel, flex: 1 }}>Piso
@@ -281,7 +281,7 @@ export default function PanelTecnico({ perfil }) {
                       <ValorUnitario etiqueta="Valor unitario por rociador" valor={v.valor} onChange={(n) => setItem(k, { valor: n })} />
                       {(v.entradas || []).map((en, idx) => (
                         <div key={idx} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, background: "#f8f9f7", padding: 8, borderRadius: 8, flexWrap: "wrap" }}>
-                          <SelectTorrePiso etiqueta="Torre" valor={en.torre} onChange={(n) => actualizarRociador(k, idx, "torre", n)} />
+                          <SelectTorrePiso etiqueta="Torre" opciones={TORRES} valor={en.torre} onChange={(n) => actualizarRociador(k, idx, "torre", n)} />
                           <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, marginTop: 12 }}>
                             <input type="checkbox" checked={en.cuartoBasuras} onChange={(e) => actualizarRociador(k, idx, "cuartoBasuras", e.target.checked)} />
                             Cuarto de basuras
@@ -303,8 +303,8 @@ export default function PanelTecnico({ perfil }) {
                       <ValorUnitario etiqueta="Valor unitario por piso" valor={v.valor} onChange={(n) => setItem(k, { valor: n })} />
                       {(v.pisos || []).map((p, idx) => (
                         <div key={idx} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, background: "#f8f9f7", padding: 8, borderRadius: 8 }}>
-                          <SelectTorrePiso etiqueta="Torre" valor={p.torre} onChange={(n) => actualizarPiso(k, idx, "torre", n)} />
-                          <SelectTorrePiso etiqueta="Piso" valor={p.piso} onChange={(n) => actualizarPiso(k, idx, "piso", n)} />
+                          <SelectTorrePiso etiqueta="Torre" opciones={TORRES} valor={p.torre} onChange={(n) => actualizarPiso(k, idx, "torre", n)} />
+                          <SelectTorrePiso etiqueta="Piso" opciones={PISOS} valor={p.piso} onChange={(n) => actualizarPiso(k, idx, "piso", n)} />
                           {d.permite_romper && (
                             <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#a15b2b", flex: 1, marginTop: 12 }}>
                               <input type="checkbox" checked={p.romper} onChange={(e) => actualizarPiso(k, idx, "romper", e.target.checked)} />
@@ -372,11 +372,11 @@ function ValorUnitario({ etiqueta, valor, onChange, sinMargen }) {
   );
 }
 
-function SelectTorrePiso({ etiqueta, valor, onChange }) {
+function SelectTorrePiso({ etiqueta, opciones, valor, onChange }) {
   return (
     <label style={{ fontSize: 11, color: "#6b756f" }}>{etiqueta}
       <select style={{ ...input, width: 64, padding: 6, marginTop: 2 }} value={valor} onChange={(e) => onChange(Number(e.target.value))}>
-        {PISOS.map((n) => <option key={n} value={n}>{n}</option>)}
+        {opciones.map((n) => <option key={n} value={n}>{n}</option>)}
       </select>
     </label>
   );

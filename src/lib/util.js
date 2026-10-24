@@ -69,14 +69,17 @@ export function estadoCotizacion(cot, entrega, cuenta) {
   return cot.aprobada_en ? "aprobada" : "cotizada";
 }
 
-export const PISOS = Array.from({ length: 50 }, (_, i) => i + 1);
+export const TORRES = Array.from({ length: 50 }, (_, i) => i + 1);
+// Los pisos 90-99 van primero (así los numera el cliente) y luego 1-50
+export const PISOS = [...Array.from({ length: 10 }, (_, i) => 90 + i), ...TORRES];
+const ordenPiso = (n) => (n >= 90 ? n - 100 : n);
 
 // Agrupa una lista de {torre, piso} en texto tipo "Torre 1: Pisos 1, 5, 6 · Torre 2: Pisos 2, 3"
 export function agruparPorTorre(pisos) {
   const porTorre = {};
   pisos.forEach((p) => { (porTorre[p.torre] = porTorre[p.torre] || []).push(p.piso); });
   return Object.keys(porTorre).map(Number).sort((a, b) => a - b)
-    .map((t) => `Torre ${t}: Pisos ${porTorre[t].slice().sort((a, b) => a - b).join(", ")}`)
+    .map((t) => `Torre ${t}: Pisos ${porTorre[t].slice().sort((a, b) => ordenPiso(a) - ordenPiso(b)).join(", ")}`)
     .join("\n");
 }
 
@@ -106,17 +109,44 @@ const cargarImagen = (file) => new Promise((resolve) => {
   reader.readAsDataURL(file);
 });
 
+// Dibuja la imagen reducida (lado mayor <= maxLado) sobre fondo blanco, para que una transparencia no salga negra.
+// Devuelve null si el navegador no la pudo decodificar (algunos celulares dejan el lienzo vacío con fotos muy grandes).
+async function dibujarReducida(file, maxLado) {
+  const img = await cargarImagen(file);
+  if (!img || !img.width || !img.height) return null;
+  const scale = Math.min(1, maxLado / Math.max(img.width, img.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(img.width * scale));
+  canvas.height = Math.max(1, Math.round(img.height * scale));
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return lienzoVacio(canvas) ? null : canvas;
+}
+
+// Un lienzo de un solo color (todo blanco o todo negro) indica que la imagen no se dibujó
+function lienzoVacio(canvas) {
+  const m = document.createElement("canvas");
+  m.width = m.height = 32;
+  const ctx = m.getContext("2d");
+  ctx.drawImage(canvas, 0, 0, 32, 32);
+  const d = ctx.getImageData(0, 0, 32, 32).data;
+  let min = 255, max = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    const l = (d[i] + d[i + 1] + d[i + 2]) / 3;
+    if (l < min) min = l;
+    if (l > max) max = l;
+  }
+  return max - min < 6;
+}
+
 // Comprime y marca una foto con copropiedad/torre/piso/fecha. Devuelve null si el navegador no puede leerla.
 export async function tagPhoto(file, { copName, torre, piso, fecha }) {
-  const img = await cargarImagen(file);
-  if (!img) return null;
-  const maxW = 1200;
-  const scale = Math.min(1, maxW / img.width);
-  const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
-  const canvas = document.createElement("canvas");
-  canvas.width = w; canvas.height = h;
+  const canvas = await dibujarReducida(file, 1200);
+  if (!canvas) return null;
+  const w = canvas.width, h = canvas.height;
   const ctx = canvas.getContext("2d");
-  ctx.drawImage(img, 0, 0, w, h);
   const bandH = Math.max(36, h * 0.08);
   ctx.fillStyle = "rgba(0,0,0,0.6)";
   ctx.fillRect(0, h - bandH, w, bandH);
@@ -128,12 +158,12 @@ export async function tagPhoto(file, { copName, torre, piso, fecha }) {
 
 // Foto de técnico: recorte cuadrado centrado, 500 px, JPEG
 export async function fotoCuadrada(file) {
-  const img = await cargarImagen(file);
-  if (!img) return null;
-  const lado = Math.min(img.width, img.height);
+  const src = await dibujarReducida(file, 1500);
+  if (!src) return null;
+  const lado = Math.min(src.width, src.height);
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = 500;
-  canvas.getContext("2d").drawImage(img, (img.width - lado) / 2, (img.height - lado) / 2, lado, lado, 0, 0, 500, 500);
+  canvas.getContext("2d").drawImage(src, (src.width - lado) / 2, (src.height - lado) / 2, lado, lado, 0, 0, 500, 500);
   return canvas.toDataURL("image/jpeg", 0.85);
 }
 

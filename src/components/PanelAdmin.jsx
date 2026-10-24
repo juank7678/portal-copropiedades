@@ -73,25 +73,33 @@ function EnlaceRegistro() {
 // ---------- Técnicos ----------
 const TEC_VACIO = { usuario: "", password: "", nombre: "", cedula: "", celular: "", foto: null };
 
-async function subirFotoTecnico(id, dataUrl) {
-  const path = `${id}.jpg`;
-  const { error } = await supabase.storage.from("tecnicos").upload(path, await dataUrlABlob(dataUrl), { contentType: "image/jpeg", upsert: true });
+// Cada foto nueva lleva otro nombre: si se reemplaza en el mismo archivo, el navegador puede seguir mostrando la anterior
+async function subirFotoTecnico(id, dataUrl, anterior) {
+  const path = `${id}-${Date.now()}.jpg`;
+  const { error } = await supabase.storage.from("tecnicos").upload(path, await dataUrlABlob(dataUrl), { contentType: "image/jpeg" });
   if (error) throw error;
   const { error: err2 } = await supabase.from("perfiles").update({ foto_path: path }).eq("id", id);
   if (err2) throw err2;
+  if (anterior) await supabase.storage.from("tecnicos").remove([anterior]);
 }
 
-function CampoFoto({ onFoto }) {
+function CampoFoto({ foto, onFoto }) {
   return (
     <label style={smallLabel}>Foto
-      <input type="file" accept="image/*" style={{ display: "block", marginTop: 2, fontSize: 12 }}
-        onChange={async (e) => {
-          const f = e.target.files?.[0];
-          if (!f) return;
-          const data = await fotoCuadrada(f);
-          if (!data) alert("No se pudo leer la imagen (formato no compatible con este navegador).");
-          onFoto(data);
-        }} />
+      <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 2 }}>
+        {foto && <img src={foto} alt="Vista previa" style={{ width: 36, height: 36, objectFit: "cover", borderRadius: "50%" }} />}
+        <input type="file" accept="image/*" style={{ display: "block", fontSize: 12, minWidth: 0 }}
+          onChange={async (e) => {
+            const f = e.target.files?.[0];
+            if (!f) return;
+            const data = await fotoCuadrada(f);
+            if (!data) {
+              e.target.value = "";
+              alert("No se pudo procesar esta foto. Prueba con otra o con una captura de pantalla de la foto.");
+            }
+            onFoto(data);
+          }} />
+      </div>
     </label>
   );
 }
@@ -123,11 +131,11 @@ function DirectorioTecnicos({ tecnicos, fotosTec, recargar }) {
   }, "Técnico creado. Comparte con él su usuario y contraseña.");
 
   const guardarDatos = () => ejecutar(async () => {
-    const { id, nombre, cedula, celular, foto } = edicion;
+    const { id, nombre, cedula, celular, foto, fotoAnterior } = edicion;
     if (!nombre.trim()) throw new Error("El nombre no puede quedar vacío.");
     const { error } = await supabase.from("perfiles").update({ nombre: nombre.trim().toUpperCase(), cedula: cedula.trim(), celular: celular.trim() }).eq("id", id);
     if (error) throw error;
-    if (foto) await subirFotoTecnico(id, foto);
+    if (foto) await subirFotoTecnico(id, foto, fotoAnterior);
     setEdicion(null);
   }, "Datos actualizados.");
 
@@ -169,7 +177,7 @@ function DirectorioTecnicos({ tecnicos, fotosTec, recargar }) {
         <label style={smallLabel}>Celular
           <input style={{ ...input, padding: 6, marginTop: 2 }} type="tel" value={nuevo.celular} onChange={(e) => setNuevo({ ...nuevo, celular: e.target.value })} />
         </label>
-        <CampoFoto onFoto={(foto) => setNuevo((n) => ({ ...n, foto }))} />
+        <CampoFoto foto={nuevo.foto} onFoto={(foto) => setNuevo((n) => ({ ...n, foto }))} />
       </div>
       <button type="button" style={{ ...btnPrimary, ...disabled(ocupado) }} disabled={ocupado} onClick={agregar}>+ Agregar técnico</button>
       {msg.error && <p style={errorText}>{msg.error}</p>}
@@ -189,7 +197,7 @@ function DirectorioTecnicos({ tecnicos, fotosTec, recargar }) {
                 </div>
               </div>
               <div style={{ ...fila, marginTop: 6 }}>
-                <button type="button" style={btnGhost} onClick={() => setEdicion({ id: t.id, modo: "datos", nombre: t.nombre, cedula: t.cedula, celular: t.celular, foto: null })}>Editar</button>
+                <button type="button" style={btnGhost} onClick={() => setEdicion({ id: t.id, modo: "datos", nombre: t.nombre, cedula: t.cedula, celular: t.celular, foto: null, fotoAnterior: t.foto_path })}>Editar</button>
                 <button type="button" style={btnGhost} onClick={() => setEdicion({ id: t.id, modo: "password", password: "" })}>Restablecer contraseña</button>
                 <button type="button" style={{ ...btnGhost, ...disabled(ocupado) }} disabled={ocupado} onClick={() => cambiarEstado(t)}>{t.activo ? "Desactivar" : "Activar"}</button>
                 <button type="button" style={{ ...btnDanger, ...disabled(ocupado) }} disabled={ocupado} onClick={() => eliminar(t)}>Eliminar</button>
@@ -207,7 +215,7 @@ function DirectorioTecnicos({ tecnicos, fotosTec, recargar }) {
                     <label style={smallLabel}>Celular
                       <input style={{ ...input, padding: 6, marginTop: 2 }} value={edicion.celular} onChange={(e) => setEdicion({ ...edicion, celular: e.target.value })} />
                     </label>
-                    <CampoFoto onFoto={(foto) => setEdicion((ed) => ({ ...ed, foto }))} />
+                    <CampoFoto foto={edicion.foto} onFoto={(foto) => setEdicion((ed) => ({ ...ed, foto }))} />
                   </div>
                   <div style={{ ...fila, marginTop: 8 }}>
                     <button type="button" style={{ ...btnGhost, background: "#c8622f", color: "#fff", ...disabled(ocupado) }} disabled={ocupado} onClick={guardarDatos}>Guardar</button>
