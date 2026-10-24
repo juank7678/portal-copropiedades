@@ -5,6 +5,7 @@ import RegistroCliente from "./components/RegistroCliente.jsx";
 import PanelTecnico from "./components/PanelTecnico.jsx";
 import MisVisitas from "./components/MisVisitas.jsx";
 import PanelAdmin from "./components/PanelAdmin.jsx";
+import Consultas from "./components/Consultas.jsx";
 import CambiarPassword from "./components/CambiarPassword.jsx";
 import { card } from "./styles.js";
 import { LOGO } from "./lib/logo.js";
@@ -70,6 +71,7 @@ export default function App() {
   const [errorPerfil, setErrorPerfil] = useState("");
   const [tab, setTab] = useState(null);
   const [verPassword, setVerPassword] = useState(false);
+  const [carpeta, setCarpeta] = useState(null); // copropiedad que se abre desde Consultas
 
   useEffect(() => {
     if (!configurado) return;
@@ -121,15 +123,16 @@ export default function App() {
     return <Marco><Login errorInicial={errorPerfil} /></Marco>;
   }
 
-  const salir = async () => { await supabase.auth.signOut(); setPerfil(null); setTab(null); };
+  const salir = async () => { await supabase.auth.signOut(); setPerfil(null); setTab(null); setCarpeta(null); };
   const tabs = perfil.rol === "admin"
-    ? [["admin", "Admin"], ["cliente", "Registro cliente"]]
+    ? [["admin", "Admin"], ["consultas", "Consultas"], ["cliente", "Registro cliente"]]
     : [["visita", "Nueva visita"], ["historial", "Mis visitas"]];
 
   return (
     <Marco perfil={perfil} onSalir={salir} onPassword={() => setVerPassword(true)} tabs={tabs} tab={tab} setTab={setTab}>
       {verPassword && <CambiarPassword onCerrar={() => setVerPassword(false)} />}
-      {tab === "admin" && <PanelAdmin />}
+      {tab === "admin" && <PanelAdmin abrirId={carpeta} />}
+      {tab === "consultas" && <Consultas onAbrirCarpeta={(id) => { setCarpeta(id); setTab("admin"); }} />}
       {tab === "cliente" && <RegistroCliente />}
       {tab === "visita" && <PanelTecnico perfil={perfil} />}
       {tab === "historial" && <MisVisitas />}

@@ -1,7 +1,7 @@
 // Generación de documentos PDF (todas las descargas de la app).
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import { cop, enLetras, fechaCO, fechaHoraCO, fechaLargaCO, numeroCot, slug } from "./util.js";
+import { cop, enLetras, fechaCO, fechaHoraCO, fechaISO, fechaLargaCO, numeroCot, slug } from "./util.js";
 import { LOGO, LOGO_PROPORCION } from "./logo.js";
 import { MARCA } from "./marca.js";
 
@@ -466,4 +466,38 @@ export function pdfCuentaCobro(cc) {
   if (cc.estado === "anulada") marcaAgua(doc, "ANULADA");
   piePagina(doc);
   return { doc, nombre: `cuenta-de-cobro-${numeroCot(cc.numero)}-${slug(c.nombre)}.pdf` };
+}
+
+// Reporte de una consulta del administrador: resumen (con los filtros aplicados) y tabla de resultados
+export function pdfReporte({ titulo, subtitulo, resumen, columnas, filas, totales, alinear = {} }) {
+  const doc = nuevoDoc();
+  let y = encabezado(doc, { titulo, subtitulo, fecha: `Generado el ${fechaHoraCO(new Date())}` });
+  y = seccion(doc, y, "Resumen");
+  y = datos(doc, y, resumen, 3);
+  y = seccion(doc, y, `Resultados (${filas.length})`);
+  if (!filas.length) {
+    nota(doc, y, "No hay resultados con estos filtros.");
+  } else {
+    autoTable(doc, {
+      startY: y,
+      margin: { left: M, right: M, top: 20, bottom: PIE + 2 },
+      head: [columnas.map(t)],
+      body: filas.map((f) => f.map((v) => t(v || "-"))),
+      foot: totales ? [totales.map(t)] : undefined,
+      showFoot: "lastPage",
+      theme: "plain",
+      styles: {
+        font: "helvetica", fontSize: 8, textColor: C.oscuro, valign: "middle",
+        cellPadding: { top: 2.2, bottom: 2.2, left: 2, right: 2 },
+        lineColor: C.linea, lineWidth: { bottom: 0.2 },
+      },
+      headStyles: { fillColor: C.oscuro, textColor: C.blanco, fontStyle: "bold" },
+      footStyles: { fillColor: C.claro, textColor: C.oscuro, fontStyle: "bold" },
+      alternateRowStyles: { fillColor: C.fila },
+      columnStyles: Object.fromEntries(Object.entries(alinear).map(([i, a]) => [i, { halign: a }])),
+      didParseCell: (d) => { if (alinear[d.column.index]) d.cell.styles.halign = alinear[d.column.index]; },
+    });
+  }
+  piePagina(doc);
+  return { doc, nombre: `${slug(titulo)}-${fechaISO()}.pdf` };
 }

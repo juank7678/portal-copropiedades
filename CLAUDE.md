@@ -25,6 +25,10 @@ con backend Supabase. Todas las descargas son PDF (`src/lib/pdf.js`, cargado baj
 - Marca del cliente: Cprado2001 (datos en `src/lib/marca.js`; logo transparente como data URL en `src/lib/logo.js`,
   sacado de una imagen de 186 px, solo para fondos oscuros). Guía de uso para el cliente en Claude Docs:
   https://claude.ai/code/artifact/0775f080-ec60-47f0-8513-4ad97d2facbc
+- Consultas (pestaña del admin, `src/components/Consultas.jsx`): carga todo en el navegador (por bloques de 1000),
+  filtra por texto/fechas/técnico/estado, muestra totales y descarga la vista en PDF (`pdfReporte`). "Abrir carpeta"
+  pasa a la pestaña Admin con esa copropiedad abierta (`PanelAdmin abrirId`). Carlos no usa Supabase: todo lo que
+  necesite consultar debe estar aquí. Para probarla sin cuentas reales se montó con datos simulados.
 - Frontend: `src/App.jsx` (rutas por hash: `#/registro` es el formulario público), `src/components/*`.
 - Variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` (`.env.local` en local; en el workflow de GitHub Actions).
 

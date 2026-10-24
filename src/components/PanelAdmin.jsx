@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { imagenComoDataUrl, llamarUsuarios, mensajeError, supabase } from "../lib/supabase.js";
 import { descargarPdf } from "../lib/descargar.js";
 import { cop, dataUrlABlob, estadoCotizacion, fechaCO, fotoCuadrada, numeroCot, recorteCircular, textoWhatsApp } from "../lib/util.js";
@@ -15,11 +15,11 @@ const firmar = async (bucket, paths) => {
   return Object.fromEntries((data || []).filter((d) => d.signedUrl).map((d) => [d.path, d.signedUrl]));
 };
 
-export default function PanelAdmin() {
+export default function PanelAdmin({ abrirId = null }) {
   const [tecnicos, setTecnicos] = useState([]);
   const [fotosTec, setFotosTec] = useState({});
   const [copropiedades, setCopropiedades] = useState([]);
-  const [seleccionId, setSeleccionId] = useState(null);
+  const [seleccionId, setSeleccionId] = useState(abrirId);
   const [error, setError] = useState("");
 
   const cargar = useCallback(async () => {
@@ -375,6 +375,9 @@ function Historial({ seleccion, tecnicos, onCerrar }) {
   const [miniaturas, setMiniaturas] = useState({});
   const [error, setError] = useState("");
   const [ocupado, setOcupado] = useState(null);
+  const ref = useRef(null);
+
+  useEffect(() => { ref.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }, [seleccion.id]);
 
   const cargar = useCallback(async () => {
     const { data, error: err } = await supabase.from("cotizaciones").select("*").eq("copropiedad_id", seleccion.id).order("creado_en", { ascending: false });
@@ -454,7 +457,7 @@ function Historial({ seleccion, tecnicos, onCerrar }) {
   const tecnicoNombre = tecnicos.find((t) => t.id === seleccion.tecnico_id)?.nombre;
 
   return (
-    <div style={card}>
+    <div ref={ref} style={{ ...card, scrollMarginTop: 70 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
         <h3 style={{ margin: 0 }}>Historial — {seleccion.nombre}</h3>
         <button type="button" style={btnGhost} onClick={onCerrar}>Cerrar</button>
