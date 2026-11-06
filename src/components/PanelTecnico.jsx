@@ -29,6 +29,8 @@ export default function PanelTecnico({ perfil }) {
   const [fotos, setFotos] = useState([]);
   const [items, setItems] = useState({});
   const [danoSevero, setDanoSevero] = useState("");
+  const [diagnostico, setDiagnostico] = useState("");
+  const [recomendacion, setRecomendacion] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [errorGuardar, setErrorGuardar] = useState("");
   const [generado, setGenerado] = useState(null);
@@ -62,6 +64,8 @@ export default function PanelTecnico({ perfil }) {
     setFotos([]);
     setItems(crearItemsIniciales(precios));
     setDanoSevero("");
+    setDiagnostico("");
+    setRecomendacion("");
   };
 
   const handleFotos = async (e) => {
@@ -161,6 +165,7 @@ export default function PanelTecnico({ perfil }) {
       }
       const { data, error } = await supabase.rpc("crear_cotizacion", {
         p_copropiedad_id: cop_.id, p_torre: torre, p_piso: piso, p_lineas: construirLineas(), p_fotos: paths,
+        p_diagnostico: diagnostico, p_recomendacion: recomendacion,
       });
       if (error) throw error;
       setGenerado({ cot: data, fotos: fotosInforme });
@@ -180,6 +185,8 @@ export default function PanelTecnico({ perfil }) {
       setFotos([]);
       setItems(crearItemsIniciales(precios));
       setDanoSevero("");
+      setDiagnostico("");
+      setRecomendacion("");
       setCopId("");
       setTorre(1);
       setPiso(PISOS[0]);
@@ -262,6 +269,20 @@ export default function PanelTecnico({ perfil }) {
                 </div>
               </>
             )}
+          </div>
+
+          <div style={card}>
+            <h3 style={{ marginTop: 0 }}>Diagnóstico</h3>
+            <p style={{ ...muted, marginTop: -6 }}>Este texto va en el informe que recibe el cliente. Escríbelo como se lo explicarías al administrador.</p>
+            <label style={fieldLabel}>Qué encontraste en la visita
+              <textarea style={{ ...input, minHeight: 90, fontFamily: "inherit" }} maxLength={2000} value={diagnostico}
+                onChange={(e) => setDiagnostico(e.target.value)}
+                placeholder="Ej.: La tapa del shut está en mal estado y los ejes están muy oxidados; al cerrar queda muy dura y no ajusta bien, lo que produce malos olores." />
+            </label>
+            <label style={fieldLabel}>Qué recomiendas (opcional)
+              <textarea style={{ ...input, minHeight: 50, fontFamily: "inherit" }} maxLength={1000} value={recomendacion}
+                onChange={(e) => setRecomendacion(e.target.value)} placeholder="Ej.: el cambio de la tapa y no la reparación." />
+            </label>
           </div>
 
           <div style={card}>
@@ -349,7 +370,8 @@ export default function PanelTecnico({ perfil }) {
             <div style={{ marginTop: 10, fontSize: 16, borderTop: "2px solid #1f2a24", paddingTop: 10, marginBottom: 10 }}>
               Total a pagar por este servicio: <b>{cop(total)}</b>
             </div>
-            <button style={{ ...btnPrimary, ...disabled(total === 0 || guardando) }} type="button" onClick={generar} disabled={total === 0 || guardando}>
+            {total > 0 && !diagnostico.trim() && <p style={{ fontSize: 13, color: "#a15b2b", margin: "0 0 8px" }}>Escribe el diagnóstico (arriba) para poder generar el informe.</p>}
+            <button style={{ ...btnPrimary, ...disabled(total === 0 || guardando || !diagnostico.trim()) }} type="button" onClick={generar} disabled={total === 0 || guardando || !diagnostico.trim()}>
               {guardando ? "Guardando visita…" : "Generar informe y cotizaciones"}
             </button>
             {errorGuardar && <p style={errorText}>{errorGuardar}</p>}

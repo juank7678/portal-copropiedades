@@ -4,7 +4,7 @@ Aplicación web para un servicio técnico de shuts de basura. Tiene tres pestañ
 
 - **Registro cliente**: la copropiedad diligencia sus datos y se genera su hoja de vida descargable en Excel.
 - **Técnico**: el técnico asignado abre la copropiedad, toma fotos (marcadas con torre, piso y fecha), registra los trabajos realizados y genera el informe de visita y su cotización.
-- **Admin**: directorio de técnicos (con foto e identificación descargable), asignación de técnicos, historial de visitas con la cotización al cliente (precio base + 45 %, redondeado) y edición de precios base. Incluye accesos para abrir correo y WhatsApp con el mensaje prellenado.
+- **Admin**: directorio de técnicos (con foto e identificación descargable), asignación de técnicos, historial de visitas con la cotización al cliente y edición de precios base. Incluye accesos para abrir correo y WhatsApp con el mensaje prellenado.
 
 > **Modo prueba:** no hay backend. Los datos viven en memoria y se pierden al recargar o cerrar la pestaña.
 

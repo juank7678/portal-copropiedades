@@ -8,6 +8,7 @@ import {
 import { TablaLineas } from "./PanelTecnico.jsx";
 import { EstadoBadge, descargarEntrega, fotosDe } from "./Entrega.jsx";
 import { CuentasCobro, DatosEmisor } from "./Cobros.jsx";
+import Nube from "./Nube.jsx";
 
 const firmar = async (bucket, paths) => {
   if (!paths.length) return {};
@@ -41,6 +42,7 @@ export default function PanelAdmin({ abrirId = null }) {
   return (
     <div>
       {error && <div style={card}><p style={errorText}>{error}</p></div>}
+      <Nube />
       <EnlaceRegistro />
       <DirectorioTecnicos tecnicos={tecnicos} fotosTec={fotosTec} recargar={cargar} />
       <Copropiedades copropiedades={copropiedades} tecnicos={tecnicos} recargar={cargar}
@@ -284,16 +286,20 @@ function Copropiedades({ copropiedades, tecnicos, recargar, onVer }) {
   });
 
   const eliminar = (c) => {
-    if (!window.confirm(`¿Eliminar ${c.nombre} (${c.anio}) con todas sus visitas, fotos, cotizaciones, entregas y cuentas de cobro? Esta acción no se puede deshacer.`)) return;
+    const escrito = window.prompt(`Vas a eliminar ${c.nombre} (${c.anio}) con todas sus visitas, fotos, cotizaciones y entregas. Esta acción no se puede deshacer.\n\nPara confirmar, escribe el nombre de la copropiedad:`);
+    if (escrito === null) return;
+    if (escrito.trim().toUpperCase() !== c.nombre.trim().toUpperCase()) { window.alert("El nombre no coincide. No se eliminó nada."); return; }
     ejecutar(c.id, async () => {
       const [q, e] = await Promise.all([
         supabase.from("cotizaciones").select("fotos").eq("copropiedad_id", c.id),
         supabase.from("entregas").select("fotos").eq("copropiedad_id", c.id),
       ]);
       if (q.error || e.error) throw q.error || e.error;
-      await borrarFotos([...q.data, ...e.data].flatMap((x) => x.fotos));
-      const { error: err2 } = await supabase.from("copropiedades").delete().eq("id", c.id);
+      // Primero la fila: si la base de datos no deja borrarla, las fotos siguen intactas
+      const { data, error: err2 } = await supabase.from("copropiedades").delete().eq("id", c.id).select("id");
       if (err2) throw err2;
+      if (!data.length) throw new Error("No se puede eliminar: esta copropiedad tiene cuentas de cobro emitidas.");
+      await borrarFotos([...q.data, ...e.data].flatMap((x) => x.fotos));
     });
   };
 
@@ -490,6 +496,8 @@ function Historial({ seleccion, tecnicos, onCerrar }) {
                 </div>
                 {cli && (
                   <>
+                    {h.diagnostico && <p style={{ fontSize: 13, margin: "0 0 6px", whiteSpace: "pre-line" }}><b>Diagnóstico:</b> {h.diagnostico}</p>}
+                    {h.recomendacion && <p style={{ fontSize: 13, margin: "0 0 8px", whiteSpace: "pre-line" }}><b>Recomendación:</b> {h.recomendacion}</p>}
                     <p style={{ fontSize: 12, fontWeight: 700, margin: "0 0 6px" }}>Cotización cliente N.° {numeroCot(h.numero)}</p>
                     <TablaLineas lineas={cli.lineas} campo="valor_cliente" total={cli.total_cliente} etiquetaTotal="Total cliente" />
                   </>
@@ -599,7 +607,7 @@ function Precios() {
       <button style={{ ...btnPrimary, marginTop: 8, ...disabled(guardando) }} disabled={guardando} type="button" onClick={guardar}>Guardar precios</button>
       {msg.error && <p style={errorText}>{msg.error}</p>}
       {msg.ok && <p style={okText}>{msg.ok}</p>}
-      <p style={{ fontSize: 12, color: "#6b756f" }}>El cliente paga estos valores + 45%, redondeado. Los técnicos no ven este porcentaje ni el precio del cliente: se calcula en el servidor.</p>
+      <p style={{ fontSize: 12, color: "#6b756f" }}>El precio al cliente se calcula en el servidor a partir de estos valores. Los técnicos no lo ven.</p>
     </div>
   );
 }

@@ -49,7 +49,7 @@ create table public.ajustes (
 -- Parámetros solo para el servidor/admin (margen del cliente, código de configuración inicial)
 create table public.ajustes_privados (
   id int primary key default 1 check (id = 1),
-  factor_cliente numeric(6, 3) not null default 1.45 check (factor_cliente > 0),
+  factor_cliente numeric(6, 3) not null default 1.000 check (factor_cliente > 0),
   codigo_inicial_hash text
 );
 

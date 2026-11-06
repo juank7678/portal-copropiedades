@@ -5,7 +5,7 @@ con backend Supabase. Todas las descargas son PDF (`src/lib/pdf.js`, cargado baj
 
 ## Arquitectura
 - `supabase/migrations/*.sql`: tablas, RLS, RPC `registrar_copropiedad` (pública) y `crear_cotizacion` (técnico asignado).
-  El precio al cliente (factor 1.45 en `ajustes_privados`) se calcula en el servidor y se guarda en `cotizaciones_cliente`,
+  El precio al cliente (factor en `ajustes_privados`; su valor nunca se escribe en el repo, que es público) se calcula en el servidor y se guarda en `cotizaciones_cliente`,
   que solo el admin puede leer.
 - `supabase/functions/usuarios`: Edge Function (verify_jwt = false, autentica dentro) para crear/gestionar cuentas.
   El admin inicial se crea desde la app con un código de un solo uso cuyo hash va en `ajustes_privados.codigo_inicial_hash`.
@@ -20,7 +20,13 @@ con backend Supabase. Todas las descargas son PDF (`src/lib/pdf.js`, cargado baj
   `20261024000000_pisos_90_99` (aplicada el 2026-10-24) ajusta la validación de `crear_cotizacion`.
 - Fotos: `dibujarReducida` (util.js) pinta sobre blanco y rechaza lienzos de un solo color (antes quedaban fotos negras).
   Las fotos de técnicos se guardan como `{id}-{timestamp}.jpg` y se borra la anterior.
-- La app no envía correos: "Abrir correo" es un `mailto:` y el PDF se adjunta a mano.
+- Avisos (migración `20261106000000_avisos_y_nube`): registro, visita y entrega dejan una fila en `avisos` por trigger; `pg_net` llama a la
+  función `avisos` (verify_jwt false, cabecera `x-avisos-secreto`), que arma los PDF tipo carta (`documentos.js`, modelo en `Materiales/`,
+  ignorada por git) y los manda al script de Google del cliente (`nube/Codigo.gs`): guarda en Drive (`Portal Cprado2001/COPROPIEDAD (año)/Visita 007 - fecha`)
+  y envía el correo desde su Gmail. Cron cada 2 min (`avisos_reintentar`) reintenta. La URL y la clave del script se guardan desde la tarjeta
+  "Correo y carpeta en la nube" (`Nube.jsx`). Cabecera y fondo del membrete en `public/membrete/`; la firma, solo en el bucket privado `marca`.
+  El correo y la carpeta no llevan el valor del técnico para poder reenviarlos al cliente.
+- Los `mailto:` de "Abrir correo" siguen: son para escribirle al cliente, y el PDF se adjunta a mano.
 - Al probar funciones que usan secuencias (cotizaciones, entregas, cuentas), restaurar con `setval` aunque se revierta.
 - Marca del cliente: Cprado2001 (datos en `src/lib/marca.js`; logo transparente como data URL en `src/lib/logo.js`,
   sacado de una imagen de 186 px, solo para fondos oscuros). Guía de uso para el cliente en Claude Docs:

@@ -1,0 +1,6 @@
+{
+  "imports": {
+    "jspdf": "npm:jspdf@4.2.1",
+    "jspdf-autotable": "npm:jspdf-autotable@5.0.8"
+  }
+}
