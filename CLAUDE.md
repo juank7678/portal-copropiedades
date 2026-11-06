@@ -26,6 +26,8 @@ con backend Supabase. Todas las descargas son PDF (`src/lib/pdf.js`, cargado baj
   y envía el correo desde su Gmail. Cron cada 2 min (`avisos_reintentar`) reintenta. La URL y la clave del script se guardan desde la tarjeta
   "Correo y carpeta en la nube" (`Nube.jsx`). Cabecera y fondo del membrete en `public/membrete/`; la firma, solo en el bucket privado `marca`.
   El correo y la carpeta no llevan el valor del técnico para poder reenviarlos al cliente.
+  Probado el 2026-11-06 hasta el POST a un destino interno (no a Google) y `Codigo.gs` con imitaciones. Pendiente: instalar el script en la
+  cuenta de Google del cliente y pulsar "Enviar prueba". Para desplegar `avisos` con la herramienta de Supabase hay que pasar `import_map_path: deno.json`.
 - Los `mailto:` de "Abrir correo" siguen: son para escribirle al cliente, y el PDF se adjunta a mano.
 - Al probar funciones que usan secuencias (cotizaciones, entregas, cuentas), restaurar con `setval` aunque se revierta.
 - Marca del cliente: Cprado2001 (datos en `src/lib/marca.js`; logo transparente como data URL en `src/lib/logo.js`,
