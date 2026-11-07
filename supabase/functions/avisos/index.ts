@@ -4,7 +4,7 @@
 //   { accion: "subir_firma", base64 }         guarda firma.png en el bucket privado `marca`
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { decodeBase64, encodeBase64 } from "jsr:@std/encoding@1/base64";
-import { cartaCotizacion, cartaEntrega, cartaHojaVida, cartaVisita, dinero, fechaCO, fechaISO, numero } from "./documentos.js";
+import { cartaCotizacion, cartaCotizacionTecnico, cartaEntrega, cartaHojaVida, cartaVisita, dinero, fechaCO, fechaISO, numero } from "./documentos.js";
 
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -51,9 +51,17 @@ ${nota ? `<p style="margin:14px 0 0">${esc(nota)}</p>` : ""}
 }
 
 const carpetaCop = (c: { nombre: string; anio: number }) => `${c.nombre} (${c.anio})`;
-const pdf = (d: { nombre: string; bytes: Uint8Array }) => ({ nombre: d.nombre, mime: "application/pdf", bytes: d.bytes, adjuntar: true });
-const jpgs = (lista: (Uint8Array | null)[], prefijo: string) =>
-  lista.flatMap((bytes, i) => (bytes ? [{ nombre: `${prefijo} ${i + 1}.jpg`, mime: "image/jpeg", bytes, adjuntar: false }] : []));
+// deno-lint-ignore no-explicit-any
+const carpetaVisita = (cop: any, cot: any) => [carpetaCop(cop), `Visita ${numero(cot.numero)} - ${fechaISO(cot.creado_en)}`];
+// deno-lint-ignore no-explicit-any
+const carpetaEntrega = (cop: any, cot: any, ent: any) => [...carpetaVisita(cop, cot), `Entrega ${numero(ent.numero)} - ${fechaISO(ent.fecha_entrega)}`];
+const INTERNO = "Interno - no compartir";
+const pdf = (d: { nombre: string; bytes: Uint8Array }, adjuntar = true) => ({ nombre: d.nombre, mime: "application/pdf", bytes: d.bytes, adjuntar });
+
+// Las fotos se envían por tandas y, si se acaba el tiempo de la función, el aviso sigue en la próxima vuelta del cron
+const FOTOS_POR_TANDA = 8;
+const TIEMPO_FOTOS_MS = 90000;
+const ordenarFotos = (rutas: string[]) => rutas.map((ruta) => ({ ruta, n: Number(ruta.match(/(\d+)\.jpg$/)?.[1] ?? 0) })).sort((a, b) => a.n - b.n);
 
 // deno-lint-ignore no-explicit-any
 async function construir(aviso: any) {
@@ -72,6 +80,10 @@ async function construir(aviso: any) {
         "El PDF adjunto es un ejemplo del informe con su membrete."),
       carpeta: ["Pruebas"],
       archivos: [pdf(cartaVisita(cot, cop, [], marca))],
+      adicionales: [{
+        carpeta: ["Pruebas", INTERNO],
+        archivos: [pdf(cartaCotizacionTecnico({ ...cot, total_tecnico: 0, lineas: [{ concepto: "Trabajo de ejemplo", cantidad: 1, valor_tecnico: 0 }] }, cop, marca), false)],
+      }],
     };
   }
 
@@ -98,6 +110,7 @@ async function construir(aviso: any) {
       sb.from("cotizaciones_cliente").select("*").eq("cotizacion_id", cot.id).single(),
     ]);
     const fotos = await fotosDe(cot.fotos);
+    const carpeta = carpetaVisita(cop, cot);
     return {
       asunto: `Visita N.° ${numero(cot.numero)} - ${cot.copropiedad_nombre}`,
       // Sin el valor del técnico: este correo se puede reenviar al cliente tal cual
@@ -106,8 +119,9 @@ async function construir(aviso: any) {
         ["Ubicación", `Torre ${cot.torre}, piso ${cot.piso}`], ["Diagnóstico", cot.diagnostico], ["Recomendación", cot.recomendacion],
         ["Total cotización", dinero(cliente.total_cliente)], ["Administrador", cop.administrador], ["Correo del cliente", cop.email],
       ], "Adjuntos: informe de visita y cotización. Revísalos y apruébala en el portal."),
-      carpeta: [carpetaCop(cop), `Visita ${numero(cot.numero)} - ${fechaISO(cot.creado_en)}`],
-      archivos: [pdf(cartaVisita(cot, cop, fotos, marca)), pdf(cartaCotizacion(cot, cliente, cop, marca)), ...jpgs(fotos, "Foto")],
+      carpeta,
+      archivos: [pdf(cartaVisita(cot, cop, fotos, marca)), pdf(cartaCotizacion(cot, cliente, cop, marca))],
+      adicionales: [{ carpeta: [...carpeta, INTERNO], archivos: [pdf(cartaCotizacionTecnico(cot, cop, marca), false)] }],
     };
   }
 
@@ -125,23 +139,66 @@ async function construir(aviso: any) {
         ["Copropiedad", cot.copropiedad_nombre], ["Técnico", ent.tecnico_nombre], ["Fecha de entrega", fechaCO(ent.fecha_entrega)],
         ["Cotización", `N.° ${numero(cot.numero)}`], ["Observaciones", ent.observaciones], ["Recibido por", ent.recibido_por],
       ], "Adjunto: informe de entrega. Ya se puede emitir la cuenta de cobro en el portal."),
-      carpeta: [carpetaCop(cop), `Entrega ${numero(ent.numero)} - ${fechaISO(ent.fecha_entrega)}`],
-      archivos: [pdf(cartaEntrega(cot, ent, cop, antes, despues, marca)), ...jpgs(despues, "Despues")],
+      carpeta: carpetaEntrega(cop, cot, ent),
+      archivos: [pdf(cartaEntrega(cot, ent, cop, antes, despues, marca))],
     };
   }
   throw new Descartar("Tipo de aviso desconocido.");
 }
 
+// Lleva todas las fotos a su subcarpeta. Devuelve false si aún faltan: el cron continúa desde `progreso`.
 // deno-lint-ignore no-explicit-any
-async function enviar(aviso: any, cfg: any) {
-  const m = await construir(aviso);
+async function enviarFotos(aviso: any, cfg: any) {
+  const esVisita = aviso.tipo === "fotos_visita";
+  // deno-lint-ignore no-explicit-any
+  let carpeta: string[], rutas: { ruta: string; n: number }[];
+  if (esVisita) {
+    const { data: cot } = await sb.from("cotizaciones").select("*").eq("id", aviso.ref_id).maybeSingle();
+    if (!cot) throw new Descartar("La visita ya no existe.");
+    const { data: cop } = await sb.from("copropiedades").select("*").eq("id", cot.copropiedad_id).single();
+    carpeta = [...carpetaVisita(cop, cot), "Fotos de la visita"];
+    rutas = ordenarFotos([...cot.fotos, ...cot.fotos_extra]);
+  } else {
+    const { data: ent } = await sb.from("entregas").select("*").eq("id", aviso.ref_id).maybeSingle();
+    if (!ent) throw new Descartar("La entrega ya no existe.");
+    const [{ data: cot }, { data: cop }] = await Promise.all([
+      sb.from("cotizaciones").select("*").eq("id", ent.cotizacion_id).single(),
+      sb.from("copropiedades").select("*").eq("id", ent.copropiedad_id).single(),
+    ]);
+    carpeta = [...carpetaEntrega(cop, cot, ent), "Fotos de la entrega"];
+    rutas = ordenarFotos([...ent.fotos, ...ent.fotos_extra]);
+  }
+
+  const inicio = Date.now();
+  let hechas = aviso.progreso;
+  let r: { carpeta_url?: string; raiz_url?: string } = {};
+  while (hechas < rutas.length) {
+    if (Date.now() - inicio > TIEMPO_FOTOS_MS) return { terminado: false, r };
+    const tanda = rutas.slice(hechas, hechas + FOTOS_POR_TANDA);
+    const bytes = await fotosDe(tanda.map((f) => f.ruta));
+    const faltante = bytes.findIndex((b) => !b);
+    if (faltante >= 0) throw new Error(`No se pudo leer la foto ${tanda[faltante].n} del almacenamiento.`);
+    r = await publicar(cfg, aviso, {
+      carpeta,
+      archivos: tanda.map((f, i) => ({ nombre: `Foto ${String(f.n).padStart(2, "0")}.jpg`, mime: "image/jpeg", adjuntar: false, bytes: bytes[i]! })),
+    }, false);
+    hechas += tanda.length;
+    await sb.from("avisos").update({ progreso: hechas, actualizado_en: new Date().toISOString() }).eq("id", aviso.id);
+  }
+  return { terminado: true, r };
+}
+
+// Un solo envío al script de Google: una carpeta con sus archivos y, si corresponde, el correo
+// deno-lint-ignore no-explicit-any
+async function publicar(cfg: any, aviso: any, m: any, conCorreo: boolean) {
   const res = await fetch(cfg.avisos_url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      token: cfg.avisos_token, id: aviso.id, para: cfg.avisos_correo, con_correo: aviso.con_correo,
-      asunto: m.asunto, html: m.html, carpeta: m.carpeta,
-      archivos: m.archivos.map((a) => ({ nombre: a.nombre, mime: a.mime, adjuntar: a.adjuntar, base64: encodeBase64(a.bytes) })),
+      token: cfg.avisos_token, id: aviso.id, para: cfg.avisos_correo, con_correo: conCorreo,
+      asunto: m.asunto || "", html: m.html || "", carpeta: m.carpeta,
+      // deno-lint-ignore no-explicit-any
+      archivos: m.archivos.map((a: any) => ({ nombre: a.nombre, mime: a.mime, adjuntar: a.adjuntar, base64: encodeBase64(a.bytes) })),
     }),
   });
   const texto = await res.text();
@@ -152,6 +209,15 @@ async function enviar(aviso: any, cfg: any) {
   }
   if (!r.ok) throw new Error(r.error || "El script de Google devolvió un error.");
   return r as { carpeta_url?: string; raiz_url?: string };
+}
+
+// El envío principal lleva el correo; los adicionales (carpeta interna) nunca lo llevan
+// deno-lint-ignore no-explicit-any
+async function enviar(aviso: any, cfg: any) {
+  const m = await construir(aviso);
+  const r = await publicar(cfg, aviso, m, aviso.con_correo);
+  for (const extra of m.adicionales || []) await publicar(cfg, aviso, extra, false);
+  return r;
 }
 
 Deno.serve(async (req) => {
@@ -178,7 +244,17 @@ Deno.serve(async (req) => {
 
   try {
     if (!cfg.avisos_url) throw new Error("Falta conectar la cuenta de Google.");
-    const r = await enviar(aviso, cfg);
+    let r: { carpeta_url?: string; raiz_url?: string };
+    if (aviso.tipo === "fotos_visita" || aviso.tipo === "fotos_entrega") {
+      const f = await enviarFotos(aviso, cfg);
+      if (!f.terminado) {
+        await sb.from("avisos").update({ estado: "pendiente", actualizado_en: new Date().toISOString() }).eq("id", aviso.id);
+        return json(200, { ok: true, continua: true });
+      }
+      r = f.r;
+    } else {
+      r = await enviar(aviso, cfg);
+    }
     const ahora = new Date().toISOString();
     await sb.from("avisos").update({ estado: "enviado", error: "", carpeta_url: r.carpeta_url || "", enviado_en: ahora, actualizado_en: ahora }).eq("id", aviso.id);
     if (r.raiz_url) await sb.from("ajustes_privados").update({ avisos_carpeta_url: r.raiz_url }).eq("id", 1);

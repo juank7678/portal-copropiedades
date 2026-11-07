@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { mensajeError, supabase } from "../lib/supabase.js";
 import { descargarPdf } from "../lib/descargar.js";
-import { PISOS, TORRES, agruparPorTorre, agruparRociadores, cop, dataUrlABlob, fechaCO, numeroCot, tagPhoto } from "../lib/util.js";
+import { PISOS, TORRES, agruparPorTorre, agruparRociadores, cop, fechaCO, numeroCot, tagPhoto } from "../lib/util.js";
+import { borrarBorrador, guardarBorrador, leerBorrador } from "../lib/borrador.js";
+import { MAX_FOTOS, MAX_FOTOS_INFORME, conReintentos, separarFotos, siguienteId, subirFotos } from "../lib/subidas.js";
 import { btnGhost, btnPrimary, card, disabled, errorText, fieldLabel, input, muted } from "../styles.js";
 
 function crearItemsIniciales(precios) {
@@ -34,13 +36,18 @@ export default function PanelTecnico({ perfil }) {
   const [guardando, setGuardando] = useState(false);
   const [errorGuardar, setErrorGuardar] = useState("");
   const [generado, setGenerado] = useState(null);
+  const [lote, setLote] = useState(null);
+  const [progreso, setProgreso] = useState("");
+  const [recuperado, setRecuperado] = useState(false);
+  const claveBorrador = `visita:${perfil.id}`;
 
   useEffect(() => {
     (async () => {
-      const [c, p, a] = await Promise.all([
+      const [c, p, a, b] = await Promise.all([
         supabase.from("copropiedades").select("id, nombre, anio, administrador, direccion, tel_porteria").order("nombre"),
         supabase.from("precios").select("*").order("orden"),
         supabase.from("ajustes").select("valor_romper").eq("id", 1).single(),
+        leerBorrador(claveBorrador),
       ]);
       const err = c.error || p.error || a.error;
       if (err) setErrorCarga(mensajeError(err));
@@ -48,11 +55,33 @@ export default function PanelTecnico({ perfil }) {
         setCopropiedades(c.data);
         setPrecios(p.data);
         setValorRomper(a.data.valor_romper);
-        setItems(crearItemsIniciales(p.data));
+        if (b && c.data.some((x) => x.id === b.copId)) {
+          setCopId(b.copId);
+          setTorre(b.torre);
+          setPiso(b.piso);
+          setFotos(b.fotos);
+          setItems({ ...crearItemsIniciales(p.data), ...b.items });
+          setDanoSevero(b.danoSevero);
+          setDiagnostico(b.diagnostico);
+          setRecomendacion(b.recomendacion);
+          setLote(b.lote);
+          setRecuperado(b.fotos.length > 0 || Boolean(b.diagnostico));
+        } else {
+          setItems(crearItemsIniciales(p.data));
+        }
       }
       setCargando(false);
     })();
-  }, []);
+  }, [claveBorrador]);
+
+  // Guarda el borrador en el celular mientras se llena la visita
+  useEffect(() => {
+    if (cargando || generado || !copId) return undefined;
+    const t = setTimeout(() => {
+      guardarBorrador(claveBorrador, { copId, torre, piso, fotos, items, danoSevero, diagnostico, recomendacion, lote });
+    }, 500);
+    return () => clearTimeout(t);
+  }, [cargando, generado, claveBorrador, copId, torre, piso, fotos, items, danoSevero, diagnostico, recomendacion, lote]);
 
   const cop_ = copropiedades.find((c) => c.id === copId);
   const def = Object.fromEntries(precios.map((p) => [p.clave, p]));
@@ -66,6 +95,22 @@ export default function PanelTecnico({ perfil }) {
     setDanoSevero("");
     setDiagnostico("");
     setRecomendacion("");
+    setLote(null);
+    setRecuperado(false);
+  };
+
+  const descartarBorrador = () => {
+    if (!window.confirm("Se borrarán las fotos y los datos de esta visita sin registrar. ¿Continuar?")) return;
+    borrarBorrador(claveBorrador);
+    setCopId("");
+    setFotos([]);
+    setItems(crearItemsIniciales(precios));
+    setDanoSevero("");
+    setDiagnostico("");
+    setRecomendacion("");
+    setLote(null);
+    setRecuperado(false);
+    setErrorGuardar("");
   };
 
   const handleFotos = async (e) => {
@@ -75,13 +120,18 @@ export default function PanelTecnico({ perfil }) {
     const nuevas = await Promise.all(files.map((f) => tagPhoto(f, { copName: cop_?.nombre || "cop", torre, piso, fecha })));
     const validas = nuevas.filter(Boolean);
     if (validas.length < nuevas.length) alert("Algunas fotos no se pudieron leer (formato no compatible con este navegador).");
-    setFotos((prev) => [...prev, ...validas.map((n) => ({ ...n, enInforme: false }))]);
+    setFotos((prev) => {
+      const espacio = MAX_FOTOS - prev.length;
+      if (validas.length > espacio) alert(`Una visita lleva máximo ${MAX_FOTOS} fotos.`);
+      const base = siguienteId(prev);
+      return [...prev, ...validas.slice(0, espacio).map((n, i) => ({ ...n, id: base + i, enInforme: false, subida: false }))];
+    });
   };
 
   const toggleInforme = (i) => {
     const seleccionadas = fotos.filter((f) => f.enInforme).length;
-    if (!fotos[i].enInforme && seleccionadas >= 4) {
-      alert("El informe de visita lleva máximo 4 fotos. Quita una para agregar otra.");
+    if (!fotos[i].enInforme && seleccionadas >= MAX_FOTOS_INFORME) {
+      alert(`El informe de visita lleva máximo ${MAX_FOTOS_INFORME} fotos. Quita una para agregar otra.`);
       return;
     }
     setFotos((prev) => prev.map((f, idx) => (idx === i ? { ...f, enInforme: !f.enInforme } : f)));
@@ -154,25 +204,27 @@ export default function PanelTecnico({ perfil }) {
     setErrorGuardar("");
     setGuardando(true);
     try {
-      const fotosInforme = fotos.some((f) => f.enInforme) ? fotos.filter((f) => f.enInforme).slice(0, 4) : fotos.slice(0, 4);
-      const lote = crypto.randomUUID();
-      const paths = [];
-      for (const [i, f] of fotosInforme.entries()) {
-        const path = `${cop_.id}/${lote}/${i + 1}.jpg`;
-        const { error } = await supabase.storage.from("visitas").upload(path, await dataUrlABlob(f.dataUrl), { contentType: "image/jpeg" });
-        if (error) throw new Error(`No se pudo subir la foto ${i + 1}: ${mensajeError(error)}`);
-        paths.push(path);
-      }
-      const { data, error } = await supabase.rpc("crear_cotizacion", {
-        p_copropiedad_id: cop_.id, p_torre: torre, p_piso: piso, p_lineas: construirLineas(), p_fotos: paths,
-        p_diagnostico: diagnostico, p_recomendacion: recomendacion,
-      });
+      const loteVisita = lote || crypto.randomUUID();
+      setLote(loteVisita);
+      const ruta = (f) => `${cop_.id}/${loteVisita}/${f.id}.jpg`;
+      await subirFotos(fotos.map((f) => ({ ...f, path: ruta(f) })),
+        (id) => setFotos((prev) => prev.map((f) => (f.id === id ? { ...f, subida: true } : f))),
+        (n, de) => setProgreso(`Subiendo foto ${n} de ${de}…`));
+      setProgreso("Guardando visita…");
+      const { informe, resto } = separarFotos(fotos);
+      const { data, error } = await conReintentos(() => supabase.rpc("crear_cotizacion", {
+        p_copropiedad_id: cop_.id, p_torre: torre, p_piso: piso, p_lineas: construirLineas(), p_fotos: informe.map(ruta),
+        p_diagnostico: diagnostico, p_recomendacion: recomendacion, p_fotos_extra: resto.map(ruta), p_lote: loteVisita,
+      }));
       if (error) throw error;
-      setGenerado({ cot: data, fotos: fotosInforme });
+      setGenerado({ cot: data, fotos: informe });
+      borrarBorrador(claveBorrador);
     } catch (err) {
-      setErrorGuardar(mensajeError(err));
+      const m = mensajeError(err);
+      setErrorGuardar(`${m} Tus fotos y datos siguen guardados en este celular: cuando tengas señal, pulsa de nuevo el botón.`);
     } finally {
       setGuardando(false);
+      setProgreso("");
     }
   };
 
@@ -190,11 +242,19 @@ export default function PanelTecnico({ perfil }) {
       setCopId("");
       setTorre(1);
       setPiso(PISOS[0]);
+      setLote(null);
+      setRecuperado(false);
     }} />
   );
 
   return (
     <div>
+      {recuperado && (
+        <div style={{ ...card, border: "2px solid #c8622f" }}>
+          <p style={{ margin: "0 0 8px", fontSize: 14 }}>Recuperamos una visita que no alcanzó a registrarse. Revísala y pulsa <b>Generar informe y cotizaciones</b> al final.</p>
+          <button type="button" style={btnGhost} onClick={descartarBorrador}>Descartar esta visita</button>
+        </div>
+      )}
       <div style={card}>
         <h2 style={{ marginTop: 0 }}>Panel técnico</h2>
         <p style={{ ...muted, marginTop: -8 }}>Hola, <b>{perfil.nombre}</b>. Estas son las copropiedades que tienes asignadas.</p>
@@ -250,10 +310,10 @@ export default function PanelTecnico({ perfil }) {
             {fotos.length > 0 && (
               <>
                 <p style={{ fontSize: 13, fontWeight: 600, marginTop: 12, marginBottom: 2 }}>Fotos tomadas en esta visita ({fotos.length})</p>
-                <p style={{ fontSize: 12, color: "#6b756f", marginTop: 0, marginBottom: 6 }}>Toca hasta 4 para incluirlas en el informe de visita. Si no eliges ninguna, se usan las primeras 4.</p>
+                <p style={{ fontSize: 12, color: "#6b756f", marginTop: 0, marginBottom: 6 }}>Toca hasta {MAX_FOTOS_INFORME} para incluirlas en el informe de visita. Si no eliges ninguna, se usan las primeras {MAX_FOTOS_INFORME}. Todas quedan guardadas en la carpeta de Drive.</p>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                   {fotos.map((f, i) => (
-                    <div key={i} onClick={() => toggleInforme(i)} style={{ position: "relative", cursor: "pointer" }}>
+                    <div key={f.id} onClick={() => toggleInforme(i)} style={{ position: "relative", cursor: "pointer" }}>
                       <img src={f.dataUrl} alt={`Foto ${i + 1}`} style={{
                         width: 72, height: 72, objectFit: "cover", borderRadius: 6, display: "block",
                         border: f.enInforme ? "3px solid #c8622f" : "3px solid transparent",
@@ -371,8 +431,9 @@ export default function PanelTecnico({ perfil }) {
               Total a pagar por este servicio: <b>{cop(total)}</b>
             </div>
             {total > 0 && !diagnostico.trim() && <p style={{ fontSize: 13, color: "#a15b2b", margin: "0 0 8px" }}>Escribe el diagnóstico (arriba) para poder generar el informe.</p>}
-            <button style={{ ...btnPrimary, ...disabled(total === 0 || guardando || !diagnostico.trim()) }} type="button" onClick={generar} disabled={total === 0 || guardando || !diagnostico.trim()}>
-              {guardando ? "Guardando visita…" : "Generar informe y cotizaciones"}
+            {total > 0 && fotos.length === 0 && <p style={{ fontSize: 13, color: "#a15b2b", margin: "0 0 8px" }}>Toma al menos una foto (arriba) para poder generar el informe.</p>}
+            <button style={{ ...btnPrimary, ...disabled(total === 0 || guardando || !diagnostico.trim() || fotos.length === 0) }} type="button" onClick={generar} disabled={total === 0 || guardando || !diagnostico.trim() || fotos.length === 0}>
+              {guardando ? (progreso || "Guardando visita…") : "Generar informe y cotizaciones"}
             </button>
             {errorGuardar && <p style={errorText}>{errorGuardar}</p>}
           </div>

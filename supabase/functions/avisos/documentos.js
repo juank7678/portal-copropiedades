@@ -144,17 +144,13 @@ export function cartaVisita(cot, cop, fotosVisita, marca) {
   return salida(c, `Informe de visita ${numero(cot.numero)} - ${cop.nombre}`);
 }
 
-// Cotización para el cliente, con los precios calculados en el servidor
-export function cartaCotizacion(cot, cliente, cop, marca) {
-  const c = nuevaCarta(marca);
-  saludo(c, cot.creado_en, cop);
-  parrafo(c, `Atendiendo su solicitud, y de acuerdo a la visita técnica realizada, presentamos la cotización N.° ${numero(cot.numero)}, así:`);
+function tablaValores(c, lineas, campo, pie) {
   autoTable(c.doc, {
     startY: c.y,
     margin: { left: X, right: 612 - X - ANCHO, top: ARRIBA + 8, bottom: 792 - ABAJO },
     head: [["Concepto", "Cant.", "Valor unitario", "Subtotal"]],
-    body: cliente.lineas.map((l) => [t(l.concepto), String(l.cantidad), dinero(l.valor_cliente), dinero(l.valor_cliente * l.cantidad)]),
-    foot: [["Total cotización", "", "", dinero(cliente.total_cliente)]],
+    body: lineas.map((l) => [t(l.concepto), String(l.cantidad), dinero(l[campo]), dinero(l[campo] * l.cantidad)]),
+    foot: pie.map(([etiqueta, valor]) => [t(etiqueta), "", "", dinero(valor)]),
     showFoot: "lastPage",
     theme: "grid",
     styles: { font: "helvetica", fontSize: 9, textColor: OSCURO, lineColor: [120, 120, 120], lineWidth: 0.4, cellPadding: 4, fillColor: false },
@@ -165,9 +161,29 @@ export function cartaCotizacion(cot, cliente, cop, marca) {
     willDrawPage: (d) => { if (d.pageNumber > 1) membrete(c); },
   });
   c.y = c.doc.lastAutoTable.finalY + 12;
+}
+
+// Cotización para el cliente, con los precios calculados en el servidor
+export function cartaCotizacion(cot, cliente, cop, marca) {
+  const c = nuevaCarta(marca);
+  saludo(c, cot.creado_en, cop);
+  parrafo(c, `Atendiendo su solicitud, y de acuerdo a la visita técnica realizada, presentamos la cotización N.° ${numero(cot.numero)}, así:`);
+  tablaValores(c, cliente.lineas, "valor_cliente", [["Total cotización", cliente.total_cliente]]);
   parrafo(c, "Valores en pesos colombianos (COP).", { tam: 9.5, justificar: false, despues: 14 });
   despedida(c);
   return salida(c, `Cotizacion ${numero(cot.numero)} - ${cop.nombre}`);
+}
+
+// Pago del servicio al técnico: documento interno, nunca se adjunta al correo ni lleva firma
+export function cartaCotizacionTecnico(cot, cop, marca) {
+  const c = nuevaCarta(marca);
+  parrafo(c, fechaCarta(cot.creado_en), { justificar: false, despues: 14 });
+  parrafo(c, "DOCUMENTO INTERNO - NO COMPARTIR CON EL CLIENTE", { negrita: true, justificar: false, despues: 12 });
+  parrafo(c, `Cotización del técnico N.° ${numero(cot.numero)} - ${cop.nombre}`, { negrita: true, justificar: false, despues: 0 });
+  parrafo(c, `Técnico: ${cot.tecnico_nombre}. Ubicación de referencia: torre ${cot.torre}, piso ${cot.piso}.`, { justificar: false, despues: 12 });
+  tablaValores(c, cot.lineas, "valor_tecnico", [["Total a pagar al técnico", cot.total_tecnico]]);
+  parrafo(c, "Valores en pesos colombianos (COP).", { tam: 9.5, justificar: false });
+  return salida(c, `Cotizacion tecnico ${numero(cot.numero)} - ${cop.nombre}`);
 }
 
 // Informe de entrega: trabajos, fotos de antes y reparaciones (modelo "INFORME SHUT reparaciones")

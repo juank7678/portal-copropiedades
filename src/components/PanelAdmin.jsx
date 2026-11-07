@@ -292,15 +292,15 @@ function Copropiedades({ copropiedades, tecnicos, recargar, onVer }) {
     if (escrito.trim().toUpperCase() !== c.nombre.trim().toUpperCase()) { window.alert("El nombre no coincide. No se eliminó nada."); return; }
     ejecutar(c.id, async () => {
       const [q, e] = await Promise.all([
-        supabase.from("cotizaciones").select("fotos").eq("copropiedad_id", c.id),
-        supabase.from("entregas").select("fotos").eq("copropiedad_id", c.id),
+        supabase.from("cotizaciones").select("fotos, fotos_extra").eq("copropiedad_id", c.id),
+        supabase.from("entregas").select("fotos, fotos_extra").eq("copropiedad_id", c.id),
       ]);
       if (q.error || e.error) throw q.error || e.error;
       // Primero la fila: si la base de datos no deja borrarla, las fotos siguen intactas
       const { data, error: err2 } = await supabase.from("copropiedades").delete().eq("id", c.id).select("id");
       if (err2) throw err2;
       if (!data.length) throw new Error("No se puede eliminar: esta copropiedad tiene cuentas de cobro emitidas.");
-      await borrarFotos([...q.data, ...e.data].flatMap((x) => x.fotos));
+      await borrarFotos([...q.data, ...e.data].flatMap((x) => [...x.fotos, ...x.fotos_extra]));
     });
   };
 
@@ -372,6 +372,21 @@ function Copropiedades({ copropiedades, tecnicos, recargar, onVer }) {
   );
 }
 
+// Fotos que no van en el informe pero sí en la carpeta de Drive
+function OtrasFotos({ rutas, miniaturas }) {
+  if (!rutas.length) return null;
+  return (
+    <details style={{ marginBottom: 8, fontSize: 12 }}>
+      <summary style={{ cursor: "pointer", color: "#4a534d" }}>Otras fotos ({rutas.length})</summary>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+        {rutas.map((p) => miniaturas[p]
+          ? <img key={p} src={miniaturas[p]} alt="Otra foto" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 6 }} />
+          : <div key={p} style={{ width: 56, height: 56, borderRadius: 6, background: "#eef0ec" }} />)}
+      </div>
+    </details>
+  );
+}
+
 // ---------- Historial de una copropiedad ----------
 function Historial({ seleccion, tecnicos, onCerrar }) {
   const [historial, setHistorial] = useState(null);
@@ -409,7 +424,8 @@ function Historial({ seleccion, tecnicos, onCerrar }) {
     const nuevo = abiertoId === h.id ? null : h.id;
     setAbiertoId(nuevo);
     if (nuevo) {
-      const urls = await firmar("visitas", [...h.fotos, ...(entregas[h.id]?.fotos || [])]);
+      const ent = entregas[h.id];
+      const urls = await firmar("visitas", [...h.fotos, ...h.fotos_extra, ...(ent?.fotos || []), ...(ent?.fotos_extra || [])]);
       setMiniaturas((m) => ({ ...m, ...urls }));
     }
   };
@@ -445,8 +461,9 @@ function Historial({ seleccion, tecnicos, onCerrar }) {
     if (h.cuenta_cobro_id) { setError("Esta cotización ya está en una cuenta de cobro. Anula la cuenta primero."); return; }
     if (!window.confirm(`¿Eliminar la cotización N.° ${numeroCot(h.numero)} con sus fotos${entregas[h.id] ? " y su entrega" : ""}? Esta acción no se puede deshacer.`)) return;
     accion(h.id, async () => {
+      const ent = entregas[h.id];
       await borrarFila("cotizaciones", h.id);
-      await borrarFotos([...h.fotos, ...(entregas[h.id]?.fotos || [])]);
+      await borrarFotos([...h.fotos, ...h.fotos_extra, ...(ent?.fotos || []), ...(ent?.fotos_extra || [])]);
       await cargar();
     });
   };
@@ -456,7 +473,7 @@ function Historial({ seleccion, tecnicos, onCerrar }) {
     if (!window.confirm(`¿Eliminar la entrega N.° ${numeroCot(ent.numero)} con sus fotos? El técnico podrá registrarla de nuevo.`)) return;
     accion(h.id, async () => {
       await borrarFila("entregas", ent.id);
-      await borrarFotos(ent.fotos);
+      await borrarFotos([...ent.fotos, ...ent.fotos_extra]);
       await cargar();
     });
   };
@@ -495,6 +512,7 @@ function Historial({ seleccion, tecnicos, onCerrar }) {
                     ? <img key={p} src={miniaturas[p]} alt="Foto de la visita" style={{ width: 70, height: 70, objectFit: "cover", borderRadius: 6 }} />
                     : <div key={p} style={{ width: 70, height: 70, borderRadius: 6, background: "#eef0ec" }} />)}
                 </div>
+                <OtrasFotos rutas={h.fotos_extra} miniaturas={miniaturas} />
                 {cli && (
                   <>
                     {h.diagnostico && <p style={{ fontSize: 13, margin: "0 0 6px", whiteSpace: "pre-line" }}><b>Diagnóstico:</b> {h.diagnostico}</p>}
@@ -541,6 +559,7 @@ function Historial({ seleccion, tecnicos, onCerrar }) {
                         ? <img key={p} src={miniaturas[p]} alt="Foto de la entrega" style={{ width: 70, height: 70, objectFit: "cover", borderRadius: 6 }} />
                         : <div key={p} style={{ width: 70, height: 70, borderRadius: 6, background: "#eef0ec" }} />)}
                     </div>
+                    <OtrasFotos rutas={ent.fotos_extra} miniaturas={miniaturas} />
                     <div style={fila}>
                       <button type="button" style={{ ...btnGhost, background: "#c8622f", color: "#fff", ...disabled(ocupado === h.id) }} disabled={ocupado === h.id}
                         onClick={() => accion(h.id, () => descargarEntrega(h, ent, seleccion))}>Informe de entrega (PDF)</button>
