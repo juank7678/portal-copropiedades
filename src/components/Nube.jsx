@@ -3,6 +3,7 @@ import { mensajeError, supabase } from "../lib/supabase.js";
 import { fechaHoraCO } from "../lib/util.js";
 import { btnGhost, btnGhostLink, btnPrimary, card, disabled, errorText, fieldLabel, fila, input, muted, okText } from "../styles.js";
 import { MARCA } from "../lib/marca.js";
+import CampoPassword from "./CampoPassword.jsx";
 import codigoScript from "../../nube/Codigo.gs?raw";
 
 const ESTADO = {
@@ -112,7 +113,7 @@ export default function Nube() {
             <input style={input} value={form.url} placeholder="https://script.google.com/macros/s/…/exec" onChange={(e) => setForm({ ...form, url: e.target.value })} />
           </label>
           <label style={fieldLabel}>Clave {conexion.conectado && <span style={{ fontWeight: 400 }}>(déjala en blanco para conservar la actual)</span>}
-            <input style={input} type="password" autoComplete="off" value={form.token} onChange={(e) => setForm({ ...form, token: e.target.value })} />
+            <CampoPassword value={form.token} onChange={(e) => setForm({ ...form, token: e.target.value })} />
           </label>
           <label style={fieldLabel}>Correo que recibe los avisos
             <input style={input} type="email" value={form.correo} onChange={(e) => setForm({ ...form, correo: e.target.value })} />

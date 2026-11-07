@@ -9,6 +9,7 @@ import { TablaLineas } from "./PanelTecnico.jsx";
 import { EstadoBadge, descargarEntrega, fotosDe } from "./Entrega.jsx";
 import { CuentasCobro, DatosEmisor } from "./Cobros.jsx";
 import Nube from "./Nube.jsx";
+import CampoPassword from "./CampoPassword.jsx";
 
 const firmar = async (bucket, paths) => {
   if (!paths.length) return {};
@@ -166,7 +167,7 @@ function DirectorioTecnicos({ tecnicos, fotosTec, recargar }) {
             onChange={(e) => setNuevo({ ...nuevo, usuario: e.target.value.toLowerCase().replace(/\s/g, "") })} />
         </label>
         <label style={smallLabel}>Contraseña (mín. 8)
-          <input style={{ ...input, padding: 6, marginTop: 2 }} type="text" autoComplete="off" value={nuevo.password}
+          <CampoPassword estilo={{ padding: 6, marginTop: 2 }} value={nuevo.password}
             onChange={(e) => setNuevo({ ...nuevo, password: e.target.value })} />
         </label>
         <label style={smallLabel}>Nombre
@@ -229,7 +230,7 @@ function DirectorioTecnicos({ tecnicos, fotosTec, recargar }) {
               {edicion?.id === t.id && edicion.modo === "password" && (
                 <div style={{ background: "#f8f9f7", borderRadius: 8, padding: 10, marginTop: 8 }}>
                   <label style={smallLabel}>Nueva contraseña (mínimo 8 caracteres)
-                    <input style={{ ...input, padding: 6, marginTop: 2 }} type="text" autoComplete="off" value={edicion.password} onChange={(e) => setEdicion({ ...edicion, password: e.target.value })} />
+                    <CampoPassword estilo={{ padding: 6, marginTop: 2 }} value={edicion.password} onChange={(e) => setEdicion({ ...edicion, password: e.target.value })} />
                   </label>
                   <div style={{ ...fila, marginTop: 8 }}>
                     <button type="button" style={{ ...btnGhost, background: "#c8622f", color: "#fff", ...disabled(ocupado) }} disabled={ocupado} onClick={guardarPassword}>Guardar contraseña</button>

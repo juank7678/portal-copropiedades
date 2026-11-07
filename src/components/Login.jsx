@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { llamarUsuarios, mensajeError, supabase, usuarioAEmail } from "../lib/supabase.js";
 import { btnPrimary, card, disabled, errorText, fieldLabel, input, muted } from "../styles.js";
+import CampoPassword from "./CampoPassword.jsx";
 
 export default function Login({ errorInicial }) {
   const [estado, setEstado] = useState(null);
@@ -37,7 +38,7 @@ export default function Login({ errorInicial }) {
           onChange={(e) => setForm({ ...form, usuario: e.target.value })} />
       </label>
       <label style={fieldLabel}>Contraseña
-        <input style={input} type="password" autoComplete="current-password" value={form.password}
+        <CampoPassword autoComplete="current-password" value={form.password}
           onChange={(e) => setForm({ ...form, password: e.target.value })} />
       </label>
       <button style={{ ...btnPrimary, ...disabled(enviando) }} disabled={enviando} type="submit">
@@ -92,10 +93,10 @@ function ConfiguracionInicial({ onListo }) {
         <input style={input} autoCapitalize="none" autoComplete="username" value={form.usuario} onChange={set("usuario")} placeholder="ej. admin" />
       </label>
       <label style={fieldLabel}>Contraseña (mínimo 8 caracteres)
-        <input style={input} type="password" autoComplete="new-password" value={form.password} onChange={set("password")} />
+        <CampoPassword value={form.password} onChange={set("password")} />
       </label>
       <label style={fieldLabel}>Confirmar contraseña
-        <input style={input} type="password" autoComplete="new-password" value={form.confirmar} onChange={set("confirmar")} />
+        <CampoPassword value={form.confirmar} onChange={set("confirmar")} />
       </label>
       <button style={{ ...btnPrimary, ...disabled(enviando) }} disabled={enviando} type="submit">
         {enviando ? "Creando…" : "Crear administrador"}

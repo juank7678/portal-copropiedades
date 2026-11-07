@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { mensajeError, supabase } from "../lib/supabase.js";
-import { btnGhost, btnPrimary, card, disabled, errorText, fieldLabel, input, okText } from "../styles.js";
+import { btnGhost, btnPrimary, card, disabled, errorText, fieldLabel, okText } from "../styles.js";
+import CampoPassword from "./CampoPassword.jsx";
 
 export default function CambiarPassword({ onCerrar }) {
   const [form, setForm] = useState({ password: "", confirmar: "" });
@@ -24,12 +25,10 @@ export default function CambiarPassword({ onCerrar }) {
     <form style={{ ...card, border: "2px solid #c8622f" }} onSubmit={guardar}>
       <h3 style={{ marginTop: 0 }}>Cambiar mi contraseña</h3>
       <label style={fieldLabel}>Nueva contraseña (mínimo 8 caracteres)
-        <input style={input} type="password" autoComplete="new-password" value={form.password}
-          onChange={(e) => setForm({ ...form, password: e.target.value })} />
+        <CampoPassword value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
       </label>
       <label style={fieldLabel}>Confirmar contraseña
-        <input style={input} type="password" autoComplete="new-password" value={form.confirmar}
-          onChange={(e) => setForm({ ...form, confirmar: e.target.value })} />
+        <CampoPassword value={form.confirmar} onChange={(e) => setForm({ ...form, confirmar: e.target.value })} />
       </label>
       <div style={{ display: "flex", gap: 8 }}>
         <button style={{ ...btnPrimary, ...disabled(enviando) }} disabled={enviando} type="submit">Guardar</button>
