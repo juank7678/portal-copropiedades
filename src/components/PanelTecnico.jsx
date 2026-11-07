@@ -16,6 +16,9 @@ function crearItemsIniciales(precios) {
   ));
 }
 
+const ACTIVIDADES_VACIAS = [{ concepto: "", valor: "" }, { concepto: "", valor: "" }, { concepto: "", valor: "" }];
+const EJEMPLOS_ACTIVIDAD = ["Ej.: Romper muro", "Ej.: Registro 70 x 50", "Actividad adicional"];
+
 const cantidadRociadores = (v) => (v.entradas || []).reduce((n, e) => n + (e.cuartoBasuras ? 1 : 0) + (e.ultimoPiso ? 1 : 0), 0);
 
 export default function PanelTecnico({ perfil }) {
@@ -33,6 +36,8 @@ export default function PanelTecnico({ perfil }) {
   const [danoSevero, setDanoSevero] = useState("");
   const [diagnostico, setDiagnostico] = useState("");
   const [recomendacion, setRecomendacion] = useState("");
+  const [requiereOficial, setRequiereOficial] = useState(null);
+  const [actividades, setActividades] = useState(ACTIVIDADES_VACIAS);
   const [guardando, setGuardando] = useState(false);
   const [errorGuardar, setErrorGuardar] = useState("");
   const [generado, setGenerado] = useState(null);
@@ -64,6 +69,8 @@ export default function PanelTecnico({ perfil }) {
           setDanoSevero(b.danoSevero);
           setDiagnostico(b.diagnostico);
           setRecomendacion(b.recomendacion);
+          setRequiereOficial(b.requiereOficial ?? null);
+          setActividades(b.actividades || ACTIVIDADES_VACIAS);
           setLote(b.lote);
           setRecuperado(b.fotos.length > 0 || Boolean(b.diagnostico));
         } else {
@@ -78,10 +85,10 @@ export default function PanelTecnico({ perfil }) {
   useEffect(() => {
     if (cargando || generado || !copId) return undefined;
     const t = setTimeout(() => {
-      guardarBorrador(claveBorrador, { copId, torre, piso, fotos, items, danoSevero, diagnostico, recomendacion, lote });
+      guardarBorrador(claveBorrador, { copId, torre, piso, fotos, items, danoSevero, diagnostico, recomendacion, requiereOficial, actividades, lote });
     }, 500);
     return () => clearTimeout(t);
-  }, [cargando, generado, claveBorrador, copId, torre, piso, fotos, items, danoSevero, diagnostico, recomendacion, lote]);
+  }, [cargando, generado, claveBorrador, copId, torre, piso, fotos, items, danoSevero, diagnostico, recomendacion, requiereOficial, actividades, lote]);
 
   const cop_ = copropiedades.find((c) => c.id === copId);
   const def = Object.fromEntries(precios.map((p) => [p.clave, p]));
@@ -95,6 +102,8 @@ export default function PanelTecnico({ perfil }) {
     setDanoSevero("");
     setDiagnostico("");
     setRecomendacion("");
+    setRequiereOficial(null);
+    setActividades(ACTIVIDADES_VACIAS);
     setLote(null);
     setRecuperado(false);
   };
@@ -108,6 +117,8 @@ export default function PanelTecnico({ perfil }) {
     setDanoSevero("");
     setDiagnostico("");
     setRecomendacion("");
+    setRequiereOficial(null);
+    setActividades(ACTIVIDADES_VACIAS);
     setLote(null);
     setRecuperado(false);
     setErrorGuardar("");
@@ -173,6 +184,14 @@ export default function PanelTecnico({ perfil }) {
 
   const total = Object.entries(items).reduce((s, [k, v]) => s + subtotal(k, v), 0) + (Number(danoSevero) || 0);
 
+  // Actividades del oficial: una fila cuenta si tiene descripción o valor, y debe tener ambos
+  const filasOficial = actividades.filter((a) => a.concepto.trim() || Number(a.valor) > 0);
+  const oficialCompleto = requiereOficial === false
+    || (requiereOficial === true && filasOficial.length > 0 && filasOficial.every((a) => a.concepto.trim() && Number(a.valor) > 0));
+  const totalOficial = requiereOficial ? filasOficial.reduce((s, a) => s + (Number(a.valor) || 0), 0) : 0;
+  const setActividad = (i, cambios) => setActividades((prev) => prev.map((a, idx) => (idx === i ? { ...a, ...cambios } : a)));
+  const hayRotura = Object.values(items).some((v) => v?.activo && (v.romper || (v.pisos || []).some((p) => p.romper)));
+
   const construirLineas = () => {
     const lineas = precios.filter((d) => items[d.clave]?.activo).flatMap((d) => {
       const v = items[d.clave];
@@ -201,6 +220,8 @@ export default function PanelTecnico({ perfil }) {
 
   const generar = async () => {
     if (!cop_ || guardando) return;
+    if (requiereOficial && hayRotura && filasOficial.some((a) => /romp|rotura|demol|muro/i.test(a.concepto))
+      && !window.confirm("Marcaste \"¿Se debe romper?\" en la cotización y el oficial también tiene una actividad de rotura. Revisa que no se cobre dos veces.\n\n¿Continuar de todos modos?")) return;
     setErrorGuardar("");
     setGuardando(true);
     try {
@@ -215,6 +236,8 @@ export default function PanelTecnico({ perfil }) {
       const { data, error } = await conReintentos(() => supabase.rpc("crear_cotizacion", {
         p_copropiedad_id: cop_.id, p_torre: torre, p_piso: piso, p_lineas: construirLineas(), p_fotos: informe.map(ruta),
         p_diagnostico: diagnostico, p_recomendacion: recomendacion, p_fotos_extra: resto.map(ruta), p_lote: loteVisita,
+        p_requiere_oficial: requiereOficial,
+        p_actividades: requiereOficial ? filasOficial.map((a) => ({ concepto: a.concepto.trim(), valor: Math.round(Number(a.valor)) })) : [],
       }));
       if (error) throw error;
       setGenerado({ cot: data, fotos: informe });
@@ -228,6 +251,8 @@ export default function PanelTecnico({ perfil }) {
     }
   };
 
+  const listo = total + totalOficial > 0 && !guardando && Boolean(diagnostico.trim()) && fotos.length > 0 && oficialCompleto;
+
   if (cargando) return <div style={card}>Cargando…</div>;
   if (errorCarga) return <div style={card}><p style={errorText}>{errorCarga}</p></div>;
 
@@ -239,6 +264,8 @@ export default function PanelTecnico({ perfil }) {
       setDanoSevero("");
       setDiagnostico("");
       setRecomendacion("");
+      setRequiereOficial(null);
+      setActividades(ACTIVIDADES_VACIAS);
       setCopId("");
       setTorre(1);
       setPiso(PISOS[0]);
@@ -346,6 +373,36 @@ export default function PanelTecnico({ perfil }) {
           </div>
 
           <div style={card}>
+            <h3 style={{ marginTop: 0 }}>¿Requiere oficial?</h3>
+            <div style={{ display: "flex", gap: 16, fontSize: 14, marginBottom: requiereOficial ? 10 : 0 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <input type="radio" name="requiere-oficial" checked={requiereOficial === true} onChange={() => setRequiereOficial(true)} /> Sí
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <input type="radio" name="requiere-oficial" checked={requiereOficial === false} onChange={() => setRequiereOficial(false)} /> No
+              </label>
+            </div>
+            {requiereOficial && (
+              <>
+                <p style={{ ...muted, marginTop: 0 }}>Registra hasta 3 actividades con su valor. Se suman a la cotización del cliente y no a tu pago.</p>
+                {actividades.map((a, i) => (
+                  <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "flex-end" }}>
+                    <label style={{ ...smallLabelOficial, flex: 1 }}>Actividad {i + 1}
+                      <input style={{ ...input, padding: 6, marginTop: 2 }} maxLength={200} value={a.concepto} placeholder={EJEMPLOS_ACTIVIDAD[i]}
+                        onChange={(e) => setActividad(i, { concepto: e.target.value })} />
+                    </label>
+                    <label style={{ ...smallLabelOficial, width: 120 }}>Valor
+                      <input type="number" min={0} style={{ ...input, padding: 6, marginTop: 2 }} value={a.valor} placeholder="$ 0"
+                        onFocus={(e) => e.target.select()} onChange={(e) => setActividad(i, { valor: e.target.value === "" ? "" : String(Math.max(0, Math.round(Number(e.target.value) || 0))) })} />
+                    </label>
+                  </div>
+                ))}
+                <div style={{ fontSize: 13, fontWeight: 700 }}>Total del oficial: {cop(totalOficial)}</div>
+              </>
+            )}
+          </div>
+
+          <div style={card}>
             <h3 style={{ marginTop: 0 }}>Cotización</h3>
             <p style={{ ...muted, marginTop: -6 }}>Marca cada trabajo realizado y coloca cuántas unidades (pisos, tapas, reductores, etc.) reparaste.</p>
             {precios.map((d) => {
@@ -430,9 +487,11 @@ export default function PanelTecnico({ perfil }) {
             <div style={{ marginTop: 10, fontSize: 16, borderTop: "2px solid #1f2a24", paddingTop: 10, marginBottom: 10 }}>
               Total a pagar por este servicio: <b>{cop(total)}</b>
             </div>
-            {total > 0 && !diagnostico.trim() && <p style={{ fontSize: 13, color: "#a15b2b", margin: "0 0 8px" }}>Escribe el diagnóstico (arriba) para poder generar el informe.</p>}
-            {total > 0 && fotos.length === 0 && <p style={{ fontSize: 13, color: "#a15b2b", margin: "0 0 8px" }}>Toma al menos una foto (arriba) para poder generar el informe.</p>}
-            <button style={{ ...btnPrimary, ...disabled(total === 0 || guardando || !diagnostico.trim() || fotos.length === 0) }} type="button" onClick={generar} disabled={total === 0 || guardando || !diagnostico.trim() || fotos.length === 0}>
+            {requiereOficial === null && <p style={{ fontSize: 13, color: "#a15b2b", margin: "0 0 8px" }}>Responde arriba si la visita requiere oficial.</p>}
+            {requiereOficial === true && !oficialCompleto && <p style={{ fontSize: 13, color: "#a15b2b", margin: "0 0 8px" }}>Completa la descripción y el valor de cada actividad del oficial.</p>}
+            {total + totalOficial > 0 && !diagnostico.trim() && <p style={{ fontSize: 13, color: "#a15b2b", margin: "0 0 8px" }}>Escribe el diagnóstico (arriba) para poder generar el informe.</p>}
+            {total + totalOficial > 0 && fotos.length === 0 && <p style={{ fontSize: 13, color: "#a15b2b", margin: "0 0 8px" }}>Toma al menos una foto (arriba) para poder generar el informe.</p>}
+            <button style={{ ...btnPrimary, ...disabled(!listo) }} type="button" onClick={generar} disabled={!listo}>
               {guardando ? (progreso || "Guardando visita…") : "Generar informe y cotizaciones"}
             </button>
             {errorGuardar && <p style={errorText}>{errorGuardar}</p>}
@@ -443,6 +502,7 @@ export default function PanelTecnico({ perfil }) {
   );
 }
 
+const smallLabelOficial = { fontSize: 11, color: "#6b756f", display: "block" };
 const quitarBtn = { background: "none", border: "none", color: "#b3261e", fontSize: 18, cursor: "pointer", marginTop: 10, marginLeft: "auto" };
 
 function ValorUnitario({ etiqueta, valor, onChange, sinMargen }) {
@@ -480,6 +540,13 @@ function DocumentosGenerados({ registro, fotos, onNuevo }) {
 
       <h3>Tu cotización (pago del servicio)</h3>
       <TablaLineas lineas={registro.lineas} campo="valor_tecnico" total={registro.total_tecnico} etiquetaTotal="Total a pagar" />
+
+      {registro.requiere_oficial && (
+        <>
+          <h3>Actividades del oficial</h3>
+          <TablaLineas lineas={registro.lineas_oficial.map((l) => ({ ...l, cantidad: 1 }))} campo="valor" total={registro.total_oficial} etiquetaTotal="Total del oficial" />
+        </>
+      )}
 
       <button style={{ ...btnPrimary, marginTop: 12 }} type="button" onClick={descargar}>Descargar mi cotización (PDF)</button>
       <button style={{ ...btnGhost, marginTop: 8, width: "100%" }} type="button" onClick={onNuevo}>Registrar otra visita</button>

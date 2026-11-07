@@ -4,6 +4,7 @@ import Login from "./components/Login.jsx";
 import RegistroCliente from "./components/RegistroCliente.jsx";
 import PanelTecnico from "./components/PanelTecnico.jsx";
 import MisVisitas from "./components/MisVisitas.jsx";
+import PanelOficial from "./components/PanelOficial.jsx";
 import PanelAdmin from "./components/PanelAdmin.jsx";
 import Consultas from "./components/Consultas.jsx";
 import CambiarPassword from "./components/CambiarPassword.jsx";
@@ -32,7 +33,7 @@ function Marco({ perfil, onSalir, onPassword, tabs, tab, setTab, children }) {
         </div>
         {perfil && (
           <div style={{ fontSize: 12, textAlign: "right" }}>
-            <div style={{ opacity: 0.8 }}>{perfil.nombre} · {perfil.rol === "admin" ? "Administrador" : "Técnico"}</div>
+            <div style={{ opacity: 0.8 }}>{perfil.nombre} · {ROLES[perfil.rol]}</div>
             <div style={{ display: "flex", gap: 6, marginTop: 6, justifyContent: "flex-end" }}>
               <button type="button" onClick={onPassword} style={headerBtn}>Cambiar contraseña</button>
               <button type="button" onClick={onSalir} style={headerBtn}>Salir</button>
@@ -61,6 +62,14 @@ function Marco({ perfil, onSalir, onPassword, tabs, tab, setTab, children }) {
     </div>
   );
 }
+
+const ROLES = { admin: "Administrador", tecnico: "Técnico", oficial: "Oficial" };
+const TAB_INICIAL = { admin: "admin", tecnico: "visita", oficial: "trabajos" };
+const PESTANAS = {
+  admin: [["admin", "Admin"], ["consultas", "Consultas"], ["cliente", "Registro cliente"]],
+  tecnico: [["visita", "Nueva visita"], ["historial", "Mis visitas"]],
+  oficial: [["trabajos", "Mis trabajos"]],
+};
 
 const headerBtn = { background: "rgba(255,255,255,0.12)", color: "#f4f5f3", border: "none", borderRadius: 6, padding: "5px 10px", cursor: "pointer", fontSize: 12 };
 
@@ -94,7 +103,7 @@ export default function App() {
       }
       setErrorPerfil("");
       setPerfil(data);
-      setTab(data.rol === "admin" ? "admin" : "visita");
+      setTab(TAB_INICIAL[data.rol]);
     });
     return () => { vigente = false; };
   }, [userId]);
@@ -124,18 +133,16 @@ export default function App() {
   }
 
   const salir = async () => { await supabase.auth.signOut(); setPerfil(null); setTab(null); setCarpeta(null); };
-  const tabs = perfil.rol === "admin"
-    ? [["admin", "Admin"], ["consultas", "Consultas"], ["cliente", "Registro cliente"]]
-    : [["visita", "Nueva visita"], ["historial", "Mis visitas"]];
 
   return (
-    <Marco perfil={perfil} onSalir={salir} onPassword={() => setVerPassword(true)} tabs={tabs} tab={tab} setTab={setTab}>
+    <Marco perfil={perfil} onSalir={salir} onPassword={() => setVerPassword(true)} tabs={PESTANAS[perfil.rol]} tab={tab} setTab={setTab}>
       {verPassword && <CambiarPassword onCerrar={() => setVerPassword(false)} />}
       {tab === "admin" && <PanelAdmin abrirId={carpeta} />}
       {tab === "consultas" && <Consultas onAbrirCarpeta={(id) => { setCarpeta(id); setTab("admin"); }} />}
       {tab === "cliente" && <RegistroCliente />}
       {tab === "visita" && <PanelTecnico perfil={perfil} />}
       {tab === "historial" && <MisVisitas />}
+      {tab === "trabajos" && <PanelOficial perfil={perfil} />}
     </Marco>
   );
 }

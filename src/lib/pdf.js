@@ -309,7 +309,7 @@ export function pdfHojaVida(c, tecnicoNombre) {
 }
 
 // Credencial tamaño 100 x 150 mm. `fotoCircular` es un PNG ya recortado en círculo (o null).
-export function pdfIdentificacion(tec, fotoCircular, copNombre) {
+export function pdfIdentificacion(tec, fotoCircular, copNombre, titulo = "TÉCNICO AUTORIZADO") {
   const doc = nuevoDoc([100, 150]);
   const W = 100;
   doc.setFillColor(...C.oscuro).rect(0, 0, W, 62, "F");
@@ -318,7 +318,7 @@ export function pdfIdentificacion(tec, fotoCircular, copNombre) {
   const logoW = 34, logoH = logoW / LOGO_PROPORCION;
   doc.addImage(LOGO, "PNG", W / 2 - logoW / 2, 4, logoW, logoH);
   doc.setFontSize(11).setTextColor(...C.acento);
-  doc.text("TÉCNICO AUTORIZADO", W / 2, 19, { align: "center", charSpace: 0.6 });
+  doc.text(titulo, W / 2, 19, { align: "center", charSpace: 0.6 });
   doc.setFont("helvetica", "normal").setFontSize(8.5).setTextColor(...C.blanco);
   doc.text(doc.splitTextToSize(t(copNombre), W - 16), W / 2, 25.5, { align: "center" });
 
@@ -418,7 +418,7 @@ export function pdfInformeEntrega(cot, ent, copropiedad, fotosAntes = [], fotosD
     ["Ejecución", ent.fecha_inicio ? `Del ${fechaCO(ent.fecha_inicio)} al ${fechaCO(ent.fecha_entrega)}` : `Entregado el ${fechaCO(ent.fecha_entrega)}`],
   ]);
   y = seccion(doc, y, "Trabajos ejecutados");
-  y = tablaTrabajos(doc, y, cot.lineas);
+  y = tablaTrabajos(doc, y, cot.trabajos || cot.lineas);
   if (fotosAntes.length) y = seccionFotos(doc, y, "Registro fotográfico: antes", fotosAntes.map((f, i) => ({ ...f, etiqueta: `Antes ${i + 1}` })));
   if (fotosDespues.length) y = seccionFotos(doc, y, "Registro fotográfico: después", fotosDespues.map((f, i) => ({ ...f, etiqueta: `Después ${i + 1}` })));
   if (ent.observaciones) {

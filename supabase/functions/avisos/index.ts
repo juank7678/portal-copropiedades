@@ -117,11 +117,12 @@ async function construir(aviso: any) {
       html: cuerpo(`Visita N.° ${numero(cot.numero)} registrada`, [
         ["Copropiedad", cot.copropiedad_nombre], ["Técnico", cot.tecnico_nombre], ["Fecha", fechaCO(cot.creado_en)],
         ["Ubicación", `Torre ${cot.torre}, piso ${cot.piso}`], ["Diagnóstico", cot.diagnostico], ["Recomendación", cot.recomendacion],
+        ["Requiere oficial", cot.requiere_oficial === true ? "Sí, falta asignarlo en el portal" : cot.requiere_oficial === false ? "No" : ""],
         ["Total cotización", dinero(cliente.total_cliente)], ["Administrador", cop.administrador], ["Correo del cliente", cop.email],
       ], "Adjuntos: informe de visita y cotización. Revísalos y apruébala en el portal."),
       carpeta,
       archivos: [pdf(cartaVisita(cot, cop, fotos, marca)), pdf(cartaCotizacion(cot, cliente, cop, marca))],
-      adicionales: [{ carpeta: [...carpeta, INTERNO], archivos: [pdf(cartaCotizacionTecnico(cot, cop, marca), false)] }],
+      adicionales: cot.lineas.length ? [{ carpeta: [...carpeta, INTERNO], archivos: [pdf(cartaCotizacionTecnico(cot, cop, marca), false)] }] : [],
     };
   }
 

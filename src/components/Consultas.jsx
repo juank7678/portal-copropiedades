@@ -39,7 +39,7 @@ export default function Consultas({ onAbrirCarpeta }) {
       const [cops, cots, clientes, entregas, cuentas, tecnicos] = await Promise.all([
         todo(() => supabase.from("copropiedades").select("*").order("nombre")),
         todo(() => supabase.from("cotizaciones")
-          .select("id, numero, copropiedad_id, copropiedad_nombre, tecnico_id, tecnico_nombre, torre, piso, total_tecnico, creado_en, aprobada_en, cuenta_cobro_id")
+          .select("id, numero, copropiedad_id, copropiedad_nombre, tecnico_id, tecnico_nombre, torre, piso, total_tecnico, total_oficial, creado_en, aprobada_en, cuenta_cobro_id")
           .order("numero", { ascending: false })),
         todo(() => supabase.from("cotizaciones_cliente").select("cotizacion_id, total_cliente").order("cotizacion_id")),
         todo(() => supabase.from("entregas").select("id, numero, cotizacion_id, fecha_entrega").order("numero")),
@@ -100,7 +100,8 @@ export default function Consultas({ onAbrirCarpeta }) {
     ["Visitas", String(cots.length)],
     ["Cotizado al cliente", cop(suma(cots, "total_cliente"))],
     ["A pagar a técnicos", cop(suma(cots, "total_tecnico"))],
-    ["Diferencia (margen)", cop(suma(cots, "total_cliente") - suma(cots, "total_tecnico"))],
+    ["A pagar a oficiales", cop(suma(cots, "total_oficial"))],
+    ["Diferencia (margen)", cop(suma(cots, "total_cliente") - suma(cots, "total_tecnico") - suma(cots, "total_oficial"))],
     ["Por cobrar", cop(suma(pendientes, "total"))],
     ["Vencido", cop(suma(pendientes.filter((c) => c.vencida), "total"))],
   ];

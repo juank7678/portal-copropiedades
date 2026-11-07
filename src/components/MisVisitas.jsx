@@ -57,6 +57,7 @@ export default function MisVisitas() {
                 <b>N.° {numeroCot(v.numero)}</b> · {fechaCO(v.creado_en)}<br />
                 {v.copropiedad_nombre} · Torre {v.torre}/Piso {v.piso}<br />
                 <span style={{ fontWeight: 700 }}>{cop(v.total_tecnico)}</span>
+                {v.requiere_oficial && <><br /><span style={muted}>Requiere oficial{v.oficial_nombre ? `: ${v.oficial_nombre}` : " (sin asignar)"}</span></>}
               </div>
               <EstadoBadge estado={estado} />
             </div>

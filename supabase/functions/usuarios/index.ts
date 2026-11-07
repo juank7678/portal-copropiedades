@@ -3,9 +3,10 @@
 //   estado                    público  -> { hay_admin }
 //   crear_admin_inicial       público, solo si no existe admin y con el código de configuración inicial
 //   crear_tecnico             admin
+//   crear_oficial             admin
 //   restablecer_password      admin
 //   cambiar_estado            admin    (activar / desactivar)
-//   eliminar_tecnico          admin
+//   eliminar_tecnico          admin    (técnico u oficial, igual que restablecer_password y cambiar_estado)
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const DOMINIO = "portal.invalid"; // los usuarios inician sesión con "usuario"; internamente se mapea a usuario@DOMINIO
@@ -59,7 +60,7 @@ async function exigirAdmin(req: Request) {
   return data.user.id;
 }
 
-async function crearCuenta(rol: "admin" | "tecnico", body: Record<string, unknown>) {
+async function crearCuenta(rol: "admin" | "tecnico" | "oficial", body: Record<string, unknown>) {
   const usuario = validarUsuario(body.usuario);
   const password = validarPassword(body.password);
   const nombre = texto(body.nombre, 120).toUpperCase();
@@ -85,9 +86,9 @@ async function crearCuenta(rol: "admin" | "tecnico", body: Record<string, unknow
 }
 
 async function perfilTecnico(id: unknown) {
-  if (typeof id !== "string") throw new ErrorApp(400, "Falta el identificador del técnico.");
+  if (typeof id !== "string") throw new ErrorApp(400, "Falta el identificador de la persona.");
   const { data } = await admin.from("perfiles").select("id, rol").eq("id", id).maybeSingle();
-  if (!data || data.rol !== "tecnico") throw new ErrorApp(404, "Técnico no encontrado.");
+  if (!data || (data.rol !== "tecnico" && data.rol !== "oficial")) throw new ErrorApp(404, "Persona no encontrada.");
   return data.id as string;
 }
 
@@ -117,6 +118,12 @@ Deno.serve(async (req) => {
       case "crear_tecnico": {
         await exigirAdmin(req);
         const id = await crearCuenta("tecnico", body);
+        return json(200, { ok: true, id });
+      }
+
+      case "crear_oficial": {
+        await exigirAdmin(req);
+        const id = await crearCuenta("oficial", body);
         return json(200, { ok: true, id });
       }
 

@@ -19,6 +19,7 @@ const firmar = async (bucket, paths) => {
 
 export default function PanelAdmin({ abrirId = null }) {
   const [tecnicos, setTecnicos] = useState([]);
+  const [oficiales, setOficiales] = useState([]);
   const [fotosTec, setFotosTec] = useState({});
   const [copropiedades, setCopropiedades] = useState([]);
   const [seleccionId, setSeleccionId] = useState(abrirId);
@@ -26,12 +27,13 @@ export default function PanelAdmin({ abrirId = null }) {
 
   const cargar = useCallback(async () => {
     const [t, c] = await Promise.all([
-      supabase.from("perfiles").select("*").eq("rol", "tecnico").order("nombre"),
+      supabase.from("perfiles").select("*").in("rol", ["tecnico", "oficial"]).order("nombre"),
       supabase.from("copropiedades").select("*").order("creado_en", { ascending: false }),
     ]);
     if (t.error || c.error) { setError(mensajeError(t.error || c.error)); return; }
     setError("");
-    setTecnicos(t.data);
+    setTecnicos(t.data.filter((x) => x.rol === "tecnico"));
+    setOficiales(t.data.filter((x) => x.rol === "oficial"));
     setCopropiedades(c.data);
     setFotosTec(await firmar("tecnicos", t.data.filter((x) => x.foto_path).map((x) => x.foto_path)));
   }, []);
@@ -45,10 +47,11 @@ export default function PanelAdmin({ abrirId = null }) {
       {error && <div style={card}><p style={errorText}>{error}</p></div>}
       <Nube />
       <EnlaceRegistro />
-      <DirectorioTecnicos tecnicos={tecnicos} fotosTec={fotosTec} recargar={cargar} />
+      <DirectorioPersonal rol="tecnico" personas={tecnicos} fotos={fotosTec} recargar={cargar} />
+      <DirectorioPersonal rol="oficial" personas={oficiales} fotos={fotosTec} recargar={cargar} />
       <Copropiedades copropiedades={copropiedades} tecnicos={tecnicos} recargar={cargar}
         onVer={(id) => setSeleccionId(id)} />
-      {seleccion && <Historial seleccion={seleccion} tecnicos={tecnicos} onCerrar={() => setSeleccionId(null)} />}
+      {seleccion && <Historial seleccion={seleccion} tecnicos={tecnicos} oficiales={oficiales} onCerrar={() => setSeleccionId(null)} />}
       <Precios />
       <PreciosAdmin />
       <DatosEmisor />
@@ -74,7 +77,7 @@ function EnlaceRegistro() {
   );
 }
 
-// ---------- Técnicos ----------
+// ---------- Técnicos y oficiales ----------
 const TEC_VACIO = { usuario: "", password: "", nombre: "", cedula: "", celular: "", foto: null };
 
 // Cada foto nueva lleva otro nombre: si se reemplaza en el mismo archivo, el navegador puede seguir mostrando la anterior
@@ -108,7 +111,24 @@ function CampoFoto({ foto, onFoto }) {
   );
 }
 
-function DirectorioTecnicos({ tecnicos, fotosTec, recargar }) {
+const TEXTOS_ROL = {
+  tecnico: {
+    titulo: "Directorio de técnicos", singular: "técnico", accion: "crear_tecnico", creado: "Técnico creado.",
+    intro: "Cada técnico inicia sesión con su propio usuario y contraseña. Regístralos con foto para poder enviar su identificación al cliente.",
+  },
+  oficial: {
+    titulo: "Directorio de oficiales", singular: "oficial", accion: "crear_oficial", creado: "Oficial creado.",
+    intro: "Cada oficial inicia sesión para ver sus trabajos y su carnet, sin precios. Regístralos con foto para generar su carnet.",
+  },
+};
+
+async function descargarCarnetOficial(persona, copNombre = "") {
+  const foto = persona.foto_path ? await recorteCircular(await imagenComoDataUrl("tecnicos", persona.foto_path)) : null;
+  await descargarPdf("pdfIdentificacion", persona, foto, copNombre, "OFICIAL AUTORIZADO");
+}
+
+function DirectorioPersonal({ rol, personas, fotos, recargar }) {
+  const textos = TEXTOS_ROL[rol];
   const [nuevo, setNuevo] = useState(TEC_VACIO);
   const [formKey, setFormKey] = useState(0);
   const [msg, setMsg] = useState({ error: "", ok: "" });
@@ -124,15 +144,15 @@ function DirectorioTecnicos({ tecnicos, fotosTec, recargar }) {
   };
 
   const agregar = () => ejecutar(async () => {
-    if (!nuevo.usuario.trim() || !nuevo.nombre.trim()) throw new Error("Escribe el usuario y el nombre del técnico.");
-    const { id } = await llamarUsuarios("crear_tecnico", {
+    if (!nuevo.usuario.trim() || !nuevo.nombre.trim()) throw new Error(`Escribe el usuario y el nombre del ${textos.singular}.`);
+    const { id } = await llamarUsuarios(textos.accion, {
       usuario: nuevo.usuario.trim().toLowerCase(), password: nuevo.password,
       nombre: nuevo.nombre, cedula: nuevo.cedula, celular: nuevo.celular,
     });
     if (nuevo.foto) await subirFotoTecnico(id, nuevo.foto);
     setNuevo(TEC_VACIO);
     setFormKey((k) => k + 1);
-  }, "Técnico creado. Comparte con él su usuario y contraseña.");
+  }, `${textos.creado} Comparte su usuario y contraseña.`);
 
   const guardarDatos = () => ejecutar(async () => {
     const { id, nombre, cedula, celular, foto, fotoAnterior } = edicion;
@@ -146,7 +166,7 @@ function DirectorioTecnicos({ tecnicos, fotosTec, recargar }) {
   const guardarPassword = () => ejecutar(async () => {
     await llamarUsuarios("restablecer_password", { id: edicion.id, password: edicion.password });
     setEdicion(null);
-  }, "Contraseña restablecida. Compártela con el técnico.");
+  }, `Contraseña restablecida. Compártela con el ${textos.singular}.`);
 
   const cambiarEstado = (t) => ejecutar(
     () => llamarUsuarios("cambiar_estado", { id: t.id, activo: !t.activo }),
@@ -155,13 +175,13 @@ function DirectorioTecnicos({ tecnicos, fotosTec, recargar }) {
 
   const eliminar = (t) => {
     if (!window.confirm(`¿Eliminar definitivamente a ${t.nombre}? Sus visitas registradas se conservan, pero ya no podrá iniciar sesión.`)) return;
-    ejecutar(() => llamarUsuarios("eliminar_tecnico", { id: t.id }), "Técnico eliminado.");
+    ejecutar(() => llamarUsuarios("eliminar_tecnico", { id: t.id }), `${t.nombre} quedó eliminado.`);
   };
 
   return (
     <div style={card}>
-      <h2 style={{ marginTop: 0 }}>Directorio de técnicos</h2>
-      <p style={{ ...muted, marginTop: -6 }}>Cada técnico inicia sesión con su propio usuario y contraseña. Regístralos con foto para poder enviar su identificación al cliente.</p>
+      <h2 style={{ marginTop: 0 }}>{textos.titulo}</h2>
+      <p style={{ ...muted, marginTop: -6 }}>{textos.intro}</p>
       <div key={formKey} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 8, alignItems: "end", marginBottom: 10 }}>
         <label style={smallLabel}>Usuario
           <input style={{ ...input, padding: 6, marginTop: 2 }} autoCapitalize="none" value={nuevo.usuario} placeholder="ej. jperez"
@@ -183,17 +203,17 @@ function DirectorioTecnicos({ tecnicos, fotosTec, recargar }) {
         </label>
         <CampoFoto foto={nuevo.foto} onFoto={(foto) => setNuevo((n) => ({ ...n, foto }))} />
       </div>
-      <button type="button" style={{ ...btnPrimary, ...disabled(ocupado) }} disabled={ocupado} onClick={agregar}>+ Agregar técnico</button>
+      <button type="button" style={{ ...btnPrimary, ...disabled(ocupado) }} disabled={ocupado} onClick={agregar}>+ Agregar {textos.singular}</button>
       {msg.error && <p style={errorText}>{msg.error}</p>}
       {msg.ok && <p style={okText}>{msg.ok}</p>}
 
-      {tecnicos.length > 0 && (
+      {personas.length > 0 && (
         <div style={{ marginTop: 14 }}>
-          {tecnicos.map((t) => (
+          {personas.map((t) => (
             <div key={t.id} style={{ borderTop: "1px solid #eee", padding: "10px 0" }}>
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                {fotosTec[t.foto_path]
-                  ? <img src={fotosTec[t.foto_path]} alt={t.nombre} style={{ width: 44, height: 44, objectFit: "cover", borderRadius: "50%" }} />
+                {fotos[t.foto_path]
+                  ? <img src={fotos[t.foto_path]} alt={t.nombre} style={{ width: 44, height: 44, objectFit: "cover", borderRadius: "50%" }} />
                   : <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#eef0ec" }} />}
                 <div style={{ flex: 1, fontSize: 13 }}>
                   <b>{t.nombre}</b> {!t.activo && <span style={{ color: "#b3261e", fontSize: 11, fontWeight: 700 }}>· INACTIVO</span>}<br />
@@ -202,6 +222,10 @@ function DirectorioTecnicos({ tecnicos, fotosTec, recargar }) {
               </div>
               <div style={{ ...fila, marginTop: 6 }}>
                 <button type="button" style={btnGhost} onClick={() => setEdicion({ id: t.id, modo: "datos", nombre: t.nombre, cedula: t.cedula, celular: t.celular, foto: null, fotoAnterior: t.foto_path })}>Editar</button>
+                {rol === "oficial" && (
+                  <button type="button" style={{ ...btnGhost, ...disabled(ocupado) }} disabled={ocupado}
+                    onClick={() => ejecutar(() => descargarCarnetOficial(t), "Carnet generado.")}>📇 Carnet (PDF)</button>
+                )}
                 <button type="button" style={btnGhost} onClick={() => setEdicion({ id: t.id, modo: "password", password: "" })}>Restablecer contraseña</button>
                 <button type="button" style={{ ...btnGhost, ...disabled(ocupado) }} disabled={ocupado} onClick={() => cambiarEstado(t)}>{t.activo ? "Desactivar" : "Activar"}</button>
                 <button type="button" style={{ ...btnDanger, ...disabled(ocupado) }} disabled={ocupado} onClick={() => eliminar(t)}>Eliminar</button>
@@ -389,7 +413,7 @@ function OtrasFotos({ rutas, miniaturas }) {
 }
 
 // ---------- Historial de una copropiedad ----------
-function Historial({ seleccion, tecnicos, onCerrar }) {
+function Historial({ seleccion, tecnicos, oficiales, onCerrar }) {
   const [historial, setHistorial] = useState(null);
   const [clientes, setClientes] = useState({});
   const [entregas, setEntregas] = useState({});
@@ -444,6 +468,11 @@ function Historial({ seleccion, tecnicos, onCerrar }) {
   });
   const pdfTecnico = (h) => accion(h.id, async () => {
     await descargarPdf("pdfCotizacionTecnico", h, await conFotos(h));
+  });
+  const asignarOficial = (h, oficial) => accion(h.id, async () => {
+    const { error: err } = await supabase.rpc("asignar_oficial", { p_id: h.id, p_oficial: oficial || null });
+    if (err) throw err;
+    await cargar();
   });
   const aprobar = (h, aprobada) => accion(h.id, async () => {
     const { error: err } = await supabase.rpc("aprobar_cotizacion", { p_id: h.id, p_aprobada: aprobada });
@@ -500,7 +529,7 @@ function Historial({ seleccion, tecnicos, onCerrar }) {
             <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
               <button type="button" onClick={() => abrir(h)}
                 style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 13, textAlign: "left", flex: 1, color: "#1f2a24" }}>
-                {abiertoId === h.id ? "▾" : "▸"} N.° {numeroCot(h.numero)} · {fechaCO(h.creado_en)} · {h.tecnico_nombre} · Torre {h.torre}/Piso {h.piso} · Cliente: {cli ? cop(cli.total_cliente) : "—"} · Técnico: {cop(h.total_tecnico)}
+                {abiertoId === h.id ? "▾" : "▸"} N.° {numeroCot(h.numero)} · {fechaCO(h.creado_en)} · {h.tecnico_nombre} · Torre {h.torre}/Piso {h.piso} · Cliente: {cli ? cop(cli.total_cliente) : "—"} · Técnico: {cop(h.total_tecnico)}{h.requiere_oficial ? ` · Oficial: ${cop(h.total_oficial)}` : ""}
               </button>
               <EstadoBadge estado={estado} />
             </div>
@@ -521,6 +550,23 @@ function Historial({ seleccion, tecnicos, onCerrar }) {
                     <p style={{ fontSize: 12, fontWeight: 700, margin: "0 0 6px" }}>Cotización cliente N.° {numeroCot(h.numero)}</p>
                     <TablaLineas lineas={cli.lineas} campo="valor_cliente" total={cli.total_cliente} etiquetaTotal="Total cliente" />
                   </>
+                )}
+                {h.requiere_oficial && (
+                  <div style={{ marginTop: 10, background: "#fff", border: "1px solid #e2e5e1", borderRadius: 8, padding: 10 }}>
+                    <p style={{ fontSize: 12, fontWeight: 700, margin: "0 0 6px" }}>Oficial</p>
+                    <TablaLineas lineas={h.lineas_oficial.map((l) => ({ ...l, cantidad: 1 }))} campo="valor" total={h.total_oficial} etiquetaTotal="A pagar al oficial" />
+                    <label style={{ fontSize: 12, color: "#6b756f", display: "block", marginTop: 8 }}>Oficial asignado:
+                      <select style={{ ...input, padding: 6, marginTop: 4 }} value={h.oficial_id || ""} disabled={ocupado === h.id || Boolean(ent)}
+                        onChange={(e) => asignarOficial(h, e.target.value)}>
+                        <option value="">— Sin asignar —</option>
+                        {oficiales.filter((o) => o.activo || o.id === h.oficial_id).map((o) => <option key={o.id} value={o.id}>{o.nombre}{o.activo ? "" : " (inactivo)"}</option>)}
+                      </select>
+                    </label>
+                    {h.oficial_id && oficiales.some((o) => o.id === h.oficial_id) && (
+                      <button type="button" style={{ ...btnGhost, marginTop: 8, ...disabled(ocupado === h.id) }} disabled={ocupado === h.id}
+                        onClick={() => accion(h.id, () => descargarCarnetOficial(oficiales.find((o) => o.id === h.oficial_id), seleccion.nombre))}>📇 Carnet de {h.oficial_nombre} (PDF)</button>
+                    )}
+                  </div>
                 )}
                 <div style={{ ...fila, marginTop: 10 }}>
                   <button type="button" style={{ ...btnGhost, background: "#c8622f", color: "#fff", ...disabled(ocupado === h.id) }} disabled={ocupado === h.id || !cli} onClick={() => pdfCliente(h)}>
@@ -636,15 +682,23 @@ function Precios() {
 // Precio al cliente por ítem. Vacío = se sigue calculando automáticamente; las cotizaciones ya emitidas no cambian.
 function PreciosAdmin() {
   const [filas, setFilas] = useState(null);
+  const [conMargen, setConMargen] = useState(null);
   const [msg, setMsg] = useState({ error: "", ok: "" });
   const [guardando, setGuardando] = useState(false);
 
   useEffect(() => {
-    supabase.rpc("precios_admin_lista").then(({ data, error }) => {
-      if (error) setMsg({ error: mensajeError(error), ok: "" });
-      else setFilas(data);
+    Promise.all([supabase.rpc("precios_admin_lista"), supabase.rpc("config_oficial")]).then(([l, c]) => {
+      if (l.error || c.error) setMsg({ error: mensajeError(l.error || c.error), ok: "" });
+      else { setFilas(l.data); setConMargen(c.data); }
     });
   }, []);
+
+  const cambiarMargen = async (valor) => {
+    setMsg({ error: "", ok: "" });
+    const { data, error } = await supabase.rpc("config_oficial", { p_con_margen: valor });
+    if (error) setMsg({ error: mensajeError(error), ok: "" });
+    else setConMargen(data);
+  };
 
   const guardar = async () => {
     setGuardando(true);
@@ -671,6 +725,12 @@ function PreciosAdmin() {
         </div>
       ))}
       {filas && <button style={{ ...btnPrimary, marginTop: 8, ...disabled(guardando) }} disabled={guardando} type="button" onClick={guardar}>Guardar precios</button>}
+      {conMargen !== null && (
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, marginTop: 12 }}>
+          <input type="checkbox" checked={conMargen} onChange={(e) => cambiarMargen(e.target.checked)} />
+          Aplicar el cálculo automático al valor del oficial (si lo desactivas, pasa igual al cliente)
+        </label>
+      )}
       {msg.error && <p style={errorText}>{msg.error}</p>}
       {msg.ok && <p style={okText}>{msg.ok}</p>}
     </div>

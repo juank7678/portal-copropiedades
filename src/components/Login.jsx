@@ -32,7 +32,7 @@ export default function Login({ errorInicial }) {
   return (
     <form style={card} onSubmit={entrar}>
       <h2 style={{ marginTop: 0 }}>Iniciar sesión</h2>
-      <p style={{ ...muted, marginTop: -8 }}>Acceso para el administrador y los técnicos.</p>
+      <p style={{ ...muted, marginTop: -8 }}>Acceso para el administrador, los técnicos y los oficiales.</p>
       <label style={fieldLabel}>Usuario
         <input style={input} autoComplete="username" autoCapitalize="none" value={form.usuario}
           onChange={(e) => setForm({ ...form, usuario: e.target.value })} />

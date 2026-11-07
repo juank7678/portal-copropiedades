@@ -138,7 +138,7 @@ export function cartaVisita(cot, cop, fotosVisita, marca) {
   if (cot.recomendacion) parrafo(c, `Recomendamos: ${cot.recomendacion}`, { negrita: true });
   fotos(c, fotosVisita);
   parrafo(c, "Trabajos identificados:", { negrita: true, justificar: false, despues: 4 });
-  trabajos(c, cot.lineas);
+  trabajos(c, cot.trabajos || cot.lineas);
   parrafo(c, `Referencia: cotización N.° ${numero(cot.numero)}. Visita realizada por ${cot.tecnico_nombre}.`, { tam: 9.5, justificar: false });
   despedida(c);
   return salida(c, `Informe de visita ${numero(cot.numero)} - ${cop.nombre}`);
@@ -191,7 +191,7 @@ export function cartaEntrega(cot, ent, cop, antes, despues, marca) {
   const c = nuevaCarta(marca);
   saludo(c, ent.fecha_entrega, cop);
   parrafo(c, `Atendiendo su solicitud de la cotización N.° ${numero(cot.numero)} enviada y aprobada, presentamos informe técnico de los trabajos realizados en la copropiedad, así:`);
-  trabajos(c, cot.lineas);
+  trabajos(c, cot.trabajos || cot.lineas);
   if (ent.observaciones) parrafo(c, ent.observaciones);
   if (antes.filter(Boolean).length) {
     parrafo(c, "ESTADO INICIAL.", { negrita: true, justificar: false, despues: 6 });
