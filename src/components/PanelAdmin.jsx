@@ -50,6 +50,7 @@ export default function PanelAdmin({ abrirId = null }) {
         onVer={(id) => setSeleccionId(id)} />
       {seleccion && <Historial seleccion={seleccion} tecnicos={tecnicos} onCerrar={() => setSeleccionId(null)} />}
       <Precios />
+      <PreciosAdmin />
       <DatosEmisor />
     </div>
   );
@@ -627,7 +628,51 @@ function Precios() {
       <button style={{ ...btnPrimary, marginTop: 8, ...disabled(guardando) }} disabled={guardando} type="button" onClick={guardar}>Guardar precios</button>
       {msg.error && <p style={errorText}>{msg.error}</p>}
       {msg.ok && <p style={okText}>{msg.ok}</p>}
-      <p style={{ fontSize: 12, color: "#6b756f" }}>El precio al cliente se calcula en el servidor a partir de estos valores. Los técnicos no lo ven.</p>
+      <p style={{ fontSize: 12, color: "#6b756f" }}>Estos son los valores que ve y cobra el técnico. Los precios al cliente están en la tarjeta siguiente y los técnicos no los ven.</p>
+    </div>
+  );
+}
+
+// Precio al cliente por ítem. Vacío = se sigue calculando automáticamente; las cotizaciones ya emitidas no cambian.
+function PreciosAdmin() {
+  const [filas, setFilas] = useState(null);
+  const [msg, setMsg] = useState({ error: "", ok: "" });
+  const [guardando, setGuardando] = useState(false);
+
+  useEffect(() => {
+    supabase.rpc("precios_admin_lista").then(({ data, error }) => {
+      if (error) setMsg({ error: mensajeError(error), ok: "" });
+      else setFilas(data);
+    });
+  }, []);
+
+  const guardar = async () => {
+    setGuardando(true);
+    setMsg({ error: "", ok: "" });
+    const { error } = await supabase.rpc("guardar_precios_admin", { p_precios: filas.map((f) => ({ clave: f.clave, valor: f.valor })) });
+    setGuardando(false);
+    setMsg(error ? { error: mensajeError(error), ok: "" } : { error: "", ok: "Precios guardados. Se aplican a las visitas nuevas." });
+  };
+
+  return (
+    <div style={card}>
+      <h3 style={{ marginTop: 0 }}>Precios base (administrador)</h3>
+      <p style={{ ...muted, marginTop: -6 }}>Precio al cliente por unidad. Si lo dejas vacío, se sigue calculando automáticamente con el valor indicado debajo de cada ítem.</p>
+      {!filas && !msg.error && <p>Cargando…</p>}
+      {filas?.map((f) => (
+        <div key={f.clave} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", gap: 8 }}>
+          <span style={{ fontSize: 13 }}>{f.etiqueta}<br /><span style={{ fontSize: 11, color: "#6b756f" }}>Automático hoy: {cop(f.calculado)}</span></span>
+          <input type="number" min={0} aria-label={`Precio al cliente de ${f.etiqueta}`} style={{ ...input, width: 120, padding: 4, marginTop: 0 }} value={f.valor ?? ""} placeholder="Automático"
+            onFocus={(e) => e.target.select()}
+            onChange={(e) => {
+              const valor = e.target.value === "" ? null : Math.max(0, Math.round(Number(e.target.value) || 0));
+              setFilas(filas.map((x) => (x.clave === f.clave ? { ...x, valor } : x)));
+            }} />
+        </div>
+      ))}
+      {filas && <button style={{ ...btnPrimary, marginTop: 8, ...disabled(guardando) }} disabled={guardando} type="button" onClick={guardar}>Guardar precios</button>}
+      {msg.error && <p style={errorText}>{msg.error}</p>}
+      {msg.ok && <p style={okText}>{msg.ok}</p>}
     </div>
   );
 }

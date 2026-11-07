@@ -179,20 +179,20 @@ export default function PanelTecnico({ perfil }) {
       if (d.tipo === "rociador") {
         const cantidad = cantidadRociadores(v);
         if (cantidad === 0) return [];
-        return [{ concepto: `${d.etiqueta} — ${agruparRociadores(v.entradas)}`, cantidad, valor_tecnico: v.valor }];
+        return [{ concepto: `${d.etiqueta} — ${agruparRociadores(v.entradas)}`, cantidad, valor_tecnico: v.valor, clave: d.clave }];
       }
       if (d.tipo === "piso") {
         const pisos = v.pisos || [];
         if (pisos.length === 0) return [];
-        const linea = { concepto: `${d.etiqueta} — ${agruparPorTorre(pisos)}`, cantidad: pisos.length, valor_tecnico: v.valor };
+        const linea = { concepto: `${d.etiqueta} — ${agruparPorTorre(pisos)}`, cantidad: pisos.length, valor_tecnico: v.valor, clave: d.clave };
         const conRotura = pisos.filter((p) => p.romper);
         const extra = conRotura.length > 0
-          ? [{ concepto: `Rotura — ${d.etiqueta} (${agruparPorTorre(conRotura)})`, cantidad: conRotura.length, valor_tecnico: valorRomper }]
+          ? [{ concepto: `Rotura — ${d.etiqueta} (${agruparPorTorre(conRotura)})`, cantidad: conRotura.length, valor_tecnico: valorRomper, clave: "rotura" }]
           : [];
         return [linea, ...extra];
       }
-      const linea = { concepto: d.etiqueta, cantidad: Number(v.cantidad) || 1, valor_tecnico: v.valor };
-      const extra = d.permite_romper && v.romper ? [{ concepto: `Rotura — ${d.etiqueta}`, cantidad: 1, valor_tecnico: valorRomper }] : [];
+      const linea = { concepto: d.etiqueta, cantidad: Number(v.cantidad) || 1, valor_tecnico: v.valor, clave: d.clave };
+      const extra = d.permite_romper && v.romper ? [{ concepto: `Rotura — ${d.etiqueta}`, cantidad: 1, valor_tecnico: valorRomper, clave: "rotura" }] : [];
       return [linea, ...extra];
     });
     if (Number(danoSevero) > 0) lineas.push({ concepto: "Daños severos (valorado en sitio)", cantidad: 1, valor_tecnico: Math.round(Number(danoSevero)) });
