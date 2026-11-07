@@ -26,8 +26,22 @@ con backend Supabase. Todas las descargas son PDF (`src/lib/pdf.js`, cargado baj
   y envía el correo desde su Gmail. Cron cada 2 min (`avisos_reintentar`) reintenta. La URL y la clave del script se guardan desde la tarjeta
   "Correo y carpeta en la nube" (`Nube.jsx`). Cabecera y fondo del membrete en `public/membrete/`; la firma, solo en el bucket privado `marca`.
   El correo y la carpeta no llevan el valor del técnico para poder reenviarlos al cliente.
-  Probado el 2026-11-06 hasta el POST a un destino interno (no a Google) y `Codigo.gs` con imitaciones. Pendiente: instalar el script en la
-  cuenta de Google del cliente y pulsar "Enviar prueba". Para desplegar `avisos` con la herramienta de Supabase hay que pasar `import_map_path: deno.json`.
+  Script instalado en la cuenta de Google del cliente y "Enviar prueba" correcta el 2026-11-06 (correo recibido con el PDF; aviso `enviado` al primer intento).
+  "Copiar lo ya registrado" también el 2026-11-06: 9 registros y 6 visitas reales en `enviado`, sin errores (sin correo, por diseño).
+  Aún sin probar con Google: correo de una visita nueva y entrega con fotos (no hay entregas todavía). Para desplegar `avisos` con la herramienta de Supabase hay que pasar `import_map_path: deno.json`.
+- Actualización del 2026-11-06/07 (migraciones `20261107`-`20261111`):
+  - Fotos: el técnico sube todas (máx. 30); `fotos` = elegidas para el informe (máx. 4, mín. 1 en visitas nuevas), `fotos_extra` = las demás. Subida con reintentos (`lib/subidas.js`),
+    borrador en el celular (`lib/borrador.js`, IndexedDB) y `cotizaciones.lote` para que un reintento no duplique la visita.
+  - Drive: `COPROPIEDAD (año)/Visita 007 - fecha/` con el informe, `Cotizacion 007 v2 - ...pdf`, `Fotos de la visita/`, `Interno - no compartir/` (cotización del técnico) y `Entrega 003 - fecha/`
+    (informe y `Fotos de la entrega/`). Sin cambiar `Codigo.gs`: la función hace varios POST. Avisos sin correo `fotos_visita` y `fotos_entrega` van por tandas de 8 con `avisos.progreso`.
+    Las 15 carpetas copiadas antes quedan con su forma anterior.
+  - `precios_admin` (solo por RPC, valor null = cálculo automático con el factor); cada línea de la visita lleva `clave` para buscar su precio.
+  - Rol `oficial`: `requiere_oficial`, `lineas_oficial`, `total_oficial`, `oficial_id`. Sus valores van a `cotizaciones_cliente.lineas` (con `origen: oficial`), no a `total_tecnico`. `mis_trabajos_oficial` no devuelve valores.
+    `ajustes_privados.oficial_con_margen` (por defecto true) es decisión pendiente del cliente; se cambia en la tarjeta de precios del administrador.
+  - Cotización: `confirmar_cotizacion` crea versión en `cotizacion_versiones` (la 1 es la original) y el aviso `cotizacion`. Aprobar exige confirmada. `total_cliente` es el total final; la cuenta de cobro lleva el descuento como línea negativa.
+    `cotizaciones.trabajos` lista conceptos sin precios para informes (null en visitas antiguas: usar `lineas`). Las 6 cotizaciones anteriores quedaron como versión 1 confirmada.
+  - Pruebas: no hay proyecto de pruebas (límite de 2 proyectos gratuitos). La base se prueba con un solo `execute_sql` que termina en `raise exception` (todo se revierte; restaurar secuencias con `setval`).
+    La función `avisos` se prueba en Node con Supabase y Google simulados, y las pantallas con `src/lib/supabase.js` simulado mediante un alias de Vite.
 - Los `mailto:` de "Abrir correo" siguen: son para escribirle al cliente, y el PDF se adjunta a mano.
 - Al probar funciones que usan secuencias (cotizaciones, entregas, cuentas), restaurar con `setval` aunque se revierta.
 - Marca del cliente: Cprado2001 (datos en `src/lib/marca.js`; logo transparente como data URL en `src/lib/logo.js`,

@@ -1,12 +1,13 @@
 # Portal de copropiedades
 
-Aplicación web para un servicio técnico de shuts de basura. Tiene tres pestañas:
+Aplicación web para un servicio técnico de shuts de basura, con backend en Supabase. Roles:
 
-- **Registro cliente**: la copropiedad diligencia sus datos y se genera su hoja de vida descargable en Excel.
-- **Técnico**: el técnico asignado abre la copropiedad, toma fotos (marcadas con torre, piso y fecha), registra los trabajos realizados y genera el informe de visita y su cotización.
-- **Admin**: directorio de técnicos (con foto e identificación descargable), asignación de técnicos, historial de visitas con la cotización al cliente y edición de precios base. Incluye accesos para abrir correo y WhatsApp con el mensaje prellenado.
+- **Cliente (enlace público)**: registra su copropiedad.
+- **Técnico**: registra visitas con fotos, diagnóstico y cotización, y luego la entrega.
+- **Oficial**: ve sus trabajos asignados, sin precios, y descarga su carnet.
+- **Administrador**: gestiona personal, copropiedades y precios, confirma cotizaciones con descuento, emite cuentas de cobro y consulta todo.
 
-> **Modo prueba:** no hay backend. Los datos viven en memoria y se pierden al recargar o cerrar la pestaña.
+Los documentos y las fotos llegan a una carpeta de Google Drive y al correo del administrador mediante el script de `nube/Codigo.gs`.
 
 ## Requisitos
 
@@ -37,13 +38,16 @@ El repositorio incluye un workflow de GitHub Actions (`.github/workflows/deploy.
 ## Tecnologías
 
 - React 19 + Vite
-- [SheetJS (xlsx)](https://sheetjs.com/) para exportar la hoja de vida en Excel (se instala desde el CDN oficial de SheetJS; la versión de npm está desactualizada)
+- Supabase (Postgres, Auth, Storage, Edge Functions)
+- jsPDF para los documentos en PDF
 
 ## Estructura
 
 ```
-index.html          Página base
-src/main.jsx        Punto de entrada de React
-src/App.jsx         Toda la aplicación (pestañas, lógica y estilos)
-public/favicon.svg  Ícono
+src/App.jsx          Rutas por rol
+src/components/      Pantallas
+src/lib/             Conexión, PDF, fotos y borradores
+supabase/migrations/ Esquema, permisos y lógica de servidor
+supabase/functions/  usuarios (cuentas) y avisos (Drive y correo)
+nube/Codigo.gs       Script de Google del cliente
 ```
