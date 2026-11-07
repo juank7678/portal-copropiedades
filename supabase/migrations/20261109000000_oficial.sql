@@ -39,7 +39,8 @@ begin
 end $$;
 
 -- ---------- Visita ----------
-drop function public.crear_cotizacion(uuid, int, int, jsonb, text[], text, text, text[], uuid);
+-- `lote`: una visita reintentada no se registra dos veces. `clave`: de qué ítem viene cada línea, para buscar su precio del administrador.
+drop function public.crear_cotizacion(uuid, int, int, jsonb, text[], text, text);
 create function public.crear_cotizacion(
   p_copropiedad_id uuid, p_torre int, p_piso int, p_lineas jsonb, p_fotos text[],
   p_diagnostico text default '', p_recomendacion text default '',

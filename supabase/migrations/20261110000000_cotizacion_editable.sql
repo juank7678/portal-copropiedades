@@ -105,8 +105,8 @@ begin
       raise exception 'Hay un concepto con datos inválidos.' using errcode = 'P0001';
     end if;
     v_subtotal := v_subtotal + v_cantidad * v_valor;
-    v_lineas := v_lineas || jsonb_build_object('concepto', v_concepto, 'cantidad', v_cantidad, 'valor_cliente', v_valor)
-                || case when v_linea ->> 'origen' = 'oficial' then jsonb_build_object('origen', 'oficial') else '{}'::jsonb end;
+    v_lineas := v_lineas || (jsonb_build_object('concepto', v_concepto, 'cantidad', v_cantidad, 'valor_cliente', v_valor)
+                || case when v_linea ->> 'origen' = 'oficial' then jsonb_build_object('origen', 'oficial') else '{}'::jsonb end);
     v_trabajos := v_trabajos || jsonb_build_object('concepto', v_concepto, 'cantidad', v_cantidad);
   end loop;
   if v_subtotal <= 0 then
