@@ -168,10 +168,13 @@ export function cartaCotizacion(cot, cliente, cop, marca) {
   const c = nuevaCarta(marca);
   saludo(c, cot.creado_en, cop);
   parrafo(c, `Atendiendo su solicitud, y de acuerdo a la visita técnica realizada, presentamos la cotización N.° ${numero(cot.numero)}, así:`);
-  tablaValores(c, cliente.lineas, "valor_cliente", [["Total cotización", cliente.total_cliente]]);
+  const descuento = cliente.descuento_valor > 0
+    ? [["Subtotal", cliente.subtotal], [`Descuento (${cliente.descuento_pct} %)`, -cliente.descuento_valor]]
+    : [];
+  tablaValores(c, cliente.lineas, "valor_cliente", [...descuento, ["Total cotización", cliente.total ?? cliente.total_cliente]]);
   parrafo(c, "Valores en pesos colombianos (COP).", { tam: 9.5, justificar: false, despues: 14 });
   despedida(c);
-  return salida(c, `Cotizacion ${numero(cot.numero)} - ${cop.nombre}`);
+  return salida(c, `Cotizacion ${numero(cot.numero)}${cliente.version ? ` v${cliente.version}` : ""} - ${cop.nombre}`);
 }
 
 // Pago del servicio al técnico: documento interno, nunca se adjunta al correo ni lleva firma

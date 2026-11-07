@@ -10,6 +10,7 @@ import { EstadoBadge, descargarEntrega, fotosDe } from "./Entrega.jsx";
 import { CuentasCobro, DatosEmisor } from "./Cobros.jsx";
 import Nube from "./Nube.jsx";
 import CampoPassword from "./CampoPassword.jsx";
+import EditorCotizacion from "./EditorCotizacion.jsx";
 
 const firmar = async (bucket, paths) => {
   if (!paths.length) return {};
@@ -547,8 +548,7 @@ function Historial({ seleccion, tecnicos, oficiales, onCerrar }) {
                   <>
                     {h.diagnostico && <p style={{ fontSize: 13, margin: "0 0 6px", whiteSpace: "pre-line" }}><b>Diagnóstico:</b> {h.diagnostico}</p>}
                     {h.recomendacion && <p style={{ fontSize: 13, margin: "0 0 8px", whiteSpace: "pre-line" }}><b>Recomendación:</b> {h.recomendacion}</p>}
-                    <p style={{ fontSize: 12, fontWeight: 700, margin: "0 0 6px" }}>Cotización cliente N.° {numeroCot(h.numero)}</p>
-                    <TablaLineas lineas={cli.lineas} campo="valor_cliente" total={cli.total_cliente} etiquetaTotal="Total cliente" />
+                    <EditorCotizacion cot={h} cliente={cli} editable={estado === "cotizada"} onListo={cargar} />
                   </>
                 )}
                 {h.requiere_oficial && (
@@ -569,22 +569,22 @@ function Historial({ seleccion, tecnicos, oficiales, onCerrar }) {
                   </div>
                 )}
                 <div style={{ ...fila, marginTop: 10 }}>
-                  <button type="button" style={{ ...btnGhost, background: "#c8622f", color: "#fff", ...disabled(ocupado === h.id) }} disabled={ocupado === h.id || !cli} onClick={() => pdfCliente(h)}>
+                  <button type="button" style={{ ...btnGhost, background: "#c8622f", color: "#fff", ...disabled(ocupado === h.id) }} disabled={ocupado === h.id || !cli?.confirmada_en} onClick={() => pdfCliente(h)}>
                     {ocupado === h.id ? "Generando…" : "PDF cliente (informe + cotización)"}
                   </button>
                   <button type="button" style={{ ...btnGhost, ...disabled(ocupado === h.id) }} disabled={ocupado === h.id} onClick={() => pdfTecnico(h)}>PDF técnico</button>
-                  {seleccion.email && cli && (
+                  {seleccion.email && cli?.confirmada_en && (
                     <a style={btnGhostLink} href={`mailto:${seleccion.email}?subject=${encodeURIComponent(`Cotización N.° ${numeroCot(h.numero)} — ${seleccion.nombre}`)}&body=${encodeURIComponent(`Buen día ${seleccion.administrador},\n\nAdjuntamos el informe de la visita técnica del ${fechaCO(h.creado_en)} y la cotización N.° ${numeroCot(h.numero)} correspondiente.\nTotal: ${cop(cli.total_cliente)}\n\nQuedamos atentos.`)}`}>
                       Abrir correo
                     </a>
                   )}
-                  {seleccion.cel_admin && cli && (
+                  {seleccion.cel_admin && cli?.confirmada_en && (
                     <a style={btnGhostLink} target="_blank" rel="noreferrer" href={`${textoWhatsApp(seleccion.cel_admin)}?text=${encodeURIComponent(`Cotización N.° ${numeroCot(h.numero)} — ${seleccion.nombre}\nFecha: ${fechaCO(h.creado_en)}\nTotal cotización: ${cop(cli.total_cliente)}\n(adjuntamos informe y fotos por este medio)`)}`}>
                       Abrir WhatsApp
                     </a>
                   )}
                   {estado === "cotizada" && (
-                    <button type="button" style={{ ...btnGhost, background: "#1f2a24", color: "#fff", ...disabled(ocupado === h.id) }} disabled={ocupado === h.id} onClick={() => aprobar(h, true)}>Marcar aprobada</button>
+                    <button type="button" style={{ ...btnGhost, background: "#1f2a24", color: "#fff", ...disabled(ocupado === h.id) }} disabled={ocupado === h.id || !cli?.confirmada_en} title={cli?.confirmada_en ? "" : "Primero confirma la cotización"} onClick={() => aprobar(h, true)}>Marcar aprobada</button>
                   )}
                   {estado === "aprobada" && (
                     <button type="button" style={{ ...btnGhost, ...disabled(ocupado === h.id) }} disabled={ocupado === h.id} onClick={() => aprobar(h, false)}>Quitar aprobación</button>
@@ -593,7 +593,7 @@ function Historial({ seleccion, tecnicos, oficiales, onCerrar }) {
                     <button type="button" style={{ ...btnDanger, ...disabled(ocupado === h.id) }} disabled={ocupado === h.id} onClick={() => eliminar(h)}>Eliminar</button>
                   )}
                 </div>
-                <p style={{ ...muted, fontSize: 11, marginBottom: 0 }}>Descarga el PDF y adjúntalo al correo o al chat de WhatsApp.</p>
+                <p style={{ ...muted, fontSize: 11, marginBottom: 0 }}>{cli?.confirmada_en ? "Descarga el PDF y adjúntalo al correo o al chat de WhatsApp." : "Revisa y confirma la cotización para generar su PDF y poder aprobarla."}</p>
                 {estado === "aprobada" && <p style={{ ...muted, fontSize: 11, margin: "4px 0 0" }}>Aprobada el {fechaCO(h.aprobada_en)}. El técnico ya puede registrar la entrega desde "Mis visitas".</p>}
 
                 {ent && (

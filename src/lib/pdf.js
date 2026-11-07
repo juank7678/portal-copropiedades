@@ -142,6 +142,17 @@ function totalDestacado(doc, y, etiqueta, valor) {
   return y + 23;
 }
 
+function filasDescuento(doc, y, cliente) {
+  y = asegurarEspacio(doc, y, 34);
+  const derecha = ancho(doc) - M;
+  doc.setFont("helvetica", "normal").setFontSize(10).setTextColor(...C.oscuro);
+  doc.text("Subtotal", derecha - 92, y);
+  doc.text(cop(cliente.subtotal), derecha, y, { align: "right" });
+  doc.text(`Descuento (${cliente.descuento_pct} %)`, derecha - 92, y + 6);
+  doc.text(cop(-cliente.descuento_valor), derecha, y + 6, { align: "right" });
+  return y + 12;
+}
+
 function nota(doc, y, texto) {
   doc.setFont("helvetica", "italic").setFontSize(8.5).setTextColor(...C.gris);
   const lineas = doc.splitTextToSize(t(texto), ancho(doc) - 2 * M);
@@ -394,6 +405,7 @@ export function pdfInformeCliente(cot, cliente, copropiedad, fotos = []) {
   ]);
   y = seccion(doc, y, "Cotización");
   y = tablaLineas(doc, y, cliente.lineas, "valor_cliente");
+  if (cliente.descuento_valor > 0) y = filasDescuento(doc, y, cliente);
   y = totalDestacado(doc, y, "Total cotización", cliente.total_cliente);
   y = nota(doc, y, "Valores en pesos colombianos (COP).");
   if (fotos.length) seccionFotos(doc, y + 2, "Registro fotográfico", fotos);

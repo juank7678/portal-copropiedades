@@ -105,24 +105,40 @@ async function construir(aviso: any) {
   if (aviso.tipo === "visita") {
     const { data: cot } = await sb.from("cotizaciones").select("*").eq("id", aviso.ref_id).maybeSingle();
     if (!cot) throw new Descartar("La visita ya no existe.");
-    const [{ data: cop }, { data: cliente }] = await Promise.all([
-      sb.from("copropiedades").select("*").eq("id", cot.copropiedad_id).single(),
-      sb.from("cotizaciones_cliente").select("*").eq("cotizacion_id", cot.id).single(),
-    ]);
+    const { data: cop } = await sb.from("copropiedades").select("*").eq("id", cot.copropiedad_id).single();
     const fotos = await fotosDe(cot.fotos);
     const carpeta = carpetaVisita(cop, cot);
     return {
       asunto: `Visita N.° ${numero(cot.numero)} - ${cot.copropiedad_nombre}`,
-      // Sin el valor del técnico: este correo se puede reenviar al cliente tal cual
+      // Sin valores: la cotización al cliente sale en otro correo cuando el administrador la confirma
       html: cuerpo(`Visita N.° ${numero(cot.numero)} registrada`, [
         ["Copropiedad", cot.copropiedad_nombre], ["Técnico", cot.tecnico_nombre], ["Fecha", fechaCO(cot.creado_en)],
         ["Ubicación", `Torre ${cot.torre}, piso ${cot.piso}`], ["Diagnóstico", cot.diagnostico], ["Recomendación", cot.recomendacion],
         ["Requiere oficial", cot.requiere_oficial === true ? "Sí, falta asignarlo en el portal" : cot.requiere_oficial === false ? "No" : ""],
-        ["Total cotización", dinero(cliente.total_cliente)], ["Administrador", cop.administrador], ["Correo del cliente", cop.email],
-      ], "Adjuntos: informe de visita y cotización. Revísalos y apruébala en el portal."),
+        ["Administrador", cop.administrador], ["Correo del cliente", cop.email],
+      ], "Adjunto: informe de visita. Revisa y confirma la cotización en el portal para generar su PDF."),
       carpeta,
-      archivos: [pdf(cartaVisita(cot, cop, fotos, marca)), pdf(cartaCotizacion(cot, cliente, cop, marca))],
+      archivos: [pdf(cartaVisita(cot, cop, fotos, marca))],
       adicionales: cot.lineas.length ? [{ carpeta: [...carpeta, INTERNO], archivos: [pdf(cartaCotizacionTecnico(cot, cop, marca), false)] }] : [],
+    };
+  }
+
+  if (aviso.tipo === "cotizacion") {
+    const { data: ver } = await sb.from("cotizacion_versiones").select("*").eq("id", aviso.ref_id).maybeSingle();
+    if (!ver) throw new Descartar("La cotización ya no existe.");
+    const { data: cot } = await sb.from("cotizaciones").select("*").eq("id", ver.cotizacion_id).single();
+    const { data: cop } = await sb.from("copropiedades").select("*").eq("id", cot.copropiedad_id).single();
+    return {
+      // Lleva solo el precio al cliente: este correo se puede reenviar tal cual
+      asunto: `Cotización N.° ${numero(cot.numero)} lista - ${cot.copropiedad_nombre}`,
+      html: cuerpo(`Cotización N.° ${numero(cot.numero)} confirmada`, [
+        ["Copropiedad", cot.copropiedad_nombre], ["Versión", ver.version],
+        ["Subtotal", ver.descuento_valor > 0 ? dinero(ver.subtotal) : ""],
+        ["Descuento", ver.descuento_valor > 0 ? `${ver.descuento_pct} % (${dinero(ver.descuento_valor)})` : ""],
+        ["Total", dinero(ver.total)], ["Administrador", cop.administrador], ["Correo del cliente", cop.email],
+      ], "Adjunto: cotización lista para enviar al cliente."),
+      carpeta: carpetaVisita(cop, cot),
+      archivos: [pdf(cartaCotizacion(cot, ver, cop, marca))],
     };
   }
 

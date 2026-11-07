@@ -554,7 +554,7 @@ function DocumentosGenerados({ registro, fotos, onNuevo }) {
   );
 }
 
-export function TablaLineas({ lineas, campo, total, etiquetaTotal }) {
+export function TablaLineas({ lineas, campo, total, etiquetaTotal, descuento = null }) {
   return (
     <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
       <tbody>
@@ -564,6 +564,18 @@ export function TablaLineas({ lineas, campo, total, etiquetaTotal }) {
             <td style={{ textAlign: "right", whiteSpace: "nowrap", paddingLeft: 8 }}>{cop(l[campo] * l.cantidad)}</td>
           </tr>
         ))}
+        {descuento && (
+          <>
+            <tr>
+              <td style={{ paddingTop: 6 }}>Subtotal</td>
+              <td style={{ textAlign: "right", paddingTop: 6 }}>{cop(descuento.subtotal)}</td>
+            </tr>
+            <tr>
+              <td>Descuento ({descuento.pct} %)</td>
+              <td style={{ textAlign: "right" }}>{cop(-descuento.valor)}</td>
+            </tr>
+          </>
+        )}
         <tr style={{ fontWeight: 700, borderTop: "1px solid #ccc" }}>
           <td style={{ paddingTop: 6 }}>{etiquetaTotal}</td>
           <td style={{ textAlign: "right", paddingTop: 6 }}>{cop(total)}</td>
