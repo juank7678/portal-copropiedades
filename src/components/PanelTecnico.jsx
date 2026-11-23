@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { mensajeError, supabase } from "../lib/supabase.js";
 import { descargarPdf } from "../lib/descargar.js";
-import { PISOS, TORRES, agruparPorTorre, agruparRociadores, cop, fechaCO, numeroCot, tagPhoto } from "../lib/util.js";
+import { PISOS, TORRES, agruparPorTorre, agruparRociadores, cop, fechaCO, numeroCot, posibleCobroDoble, tagPhoto } from "../lib/util.js";
 import { borrarBorrador, guardarBorrador, leerBorrador } from "../lib/borrador.js";
 import { MAX_FOTOS, MAX_FOTOS_INFORME, conReintentos, separarFotos, siguienteId, subirFotos } from "../lib/subidas.js";
 import { btnGhost, btnPrimary, card, disabled, errorText, fieldLabel, input, muted } from "../styles.js";
@@ -220,8 +220,8 @@ export default function PanelTecnico({ perfil }) {
 
   const generar = async () => {
     if (!cop_ || guardando) return;
-    if (requiereOficial && hayRotura && filasOficial.some((a) => /romp|rotura|demol|muro/i.test(a.concepto))
-      && !window.confirm("Marcaste \"¿Se debe romper?\" en la cotización y el oficial también tiene una actividad de rotura. Revisa que no se cobre dos veces.\n\n¿Continuar de todos modos?")) return;
+    const doble = requiereOficial ? posibleCobroDoble({ rotura: hayRotura, danos: Number(danoSevero) > 0, actividades: filasOficial.map((a) => a.concepto) }) : "";
+    if (doble && !window.confirm(`${doble}\n\n¿Continuar de todos modos?`)) return;
     setErrorGuardar("");
     setGuardando(true);
     try {

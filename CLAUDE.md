@@ -28,11 +28,11 @@ con backend Supabase. Todas las descargas son PDF (`src/lib/pdf.js`, cargado baj
   El correo y la carpeta no llevan el valor del técnico para poder reenviarlos al cliente.
   Script instalado en la cuenta de Google del cliente y "Enviar prueba" correcta el 2026-11-06 (correo recibido con el PDF; aviso `enviado` al primer intento).
   "Copiar lo ya registrado" también el 2026-11-06: 9 registros y 6 visitas reales en `enviado`, sin errores (sin correo, por diseño).
-  Aún sin probar con Google: correo de una visita nueva y entrega con fotos (no hay entregas todavía). Para desplegar `avisos` con la herramienta de Supabase hay que pasar `import_map_path: deno.json`.
+  Visitas nuevas con correo y fotos: probadas en uso real (2026-11-20). Aún sin probar con Google: confirmar cotización y entrega. Para desplegar `avisos` con la herramienta de Supabase hay que pasar `import_map_path: deno.json`.
 - Actualización del 2026-11-06/07 (migraciones `20261107`-`20261111`):
   - Fotos: el técnico sube todas (máx. 30); `fotos` = elegidas para el informe (máx. 4, mín. 1 en visitas nuevas), `fotos_extra` = las demás. Subida con reintentos (`lib/subidas.js`),
     borrador en el celular (`lib/borrador.js`, IndexedDB) y `cotizaciones.lote` para que un reintento no duplique la visita.
-  - Drive: `COPROPIEDAD (año)/Visita 007 - fecha/` con el informe, `Cotizacion 007 v2 - ...pdf`, `Fotos de la visita/`, `Interno - no compartir/` (cotización del técnico) y `Entrega 003 - fecha/`
+  - Drive: `COPROPIEDAD (año)/Visita 007 - fecha/` con el informe, `Cotizacion 007 v2 - ...pdf`, `Fotos de la visita/`, y `Entrega 003 - fecha/`
     (informe y `Fotos de la entrega/`). Sin cambiar `Codigo.gs`: la función hace varios POST. Avisos sin correo `fotos_visita` y `fotos_entrega` van por tandas de 8 con `avisos.progreso`.
     Las 15 carpetas copiadas antes quedan con su forma anterior.
   - `precios_admin` (solo por RPC, valor null = cálculo automático con el factor); cada línea de la visita lleva `clave` para buscar su precio.
@@ -42,6 +42,13 @@ con backend Supabase. Todas las descargas son PDF (`src/lib/pdf.js`, cargado baj
     `cotizaciones.trabajos` lista conceptos sin precios para informes (null en visitas antiguas: usar `lineas`). Las 6 cotizaciones anteriores quedaron como versión 1 confirmada.
   - Pruebas: no hay proyecto de pruebas (límite de 2 proyectos gratuitos). La base se prueba con un solo `execute_sql` que termina en `raise exception` (todo se revierte; restaurar secuencias con `setval`).
     La función `avisos` se prueba en Node con Supabase y Google simulados, y las pantallas con `src/lib/supabase.js` simulado mediante un alias de Vite.
+- Correcciones del 2026-11-23 (migración `20261123000000_informes_al_dia`, tras el diagnóstico con 6 visitas reales nuevas, 007-012):
+  - La cotización del técnico va a `Interno - no compartir/COPROPIEDAD (año)/` en la raíz de Drive (aviso `interno`), ya no dentro de la carpeta del cliente. Las subcarpetas
+    internas viejas de 007-012 las borra Carlos a mano (el script de Google no borra).
+  - `hoja_vida`: un aviso por copropiedad que se vuelve a encolar al cambiar datos o técnico; `progreso` es la versión (`Hoja de vida v2 - ...pdf`). La función solo marca `enviado` si sigue en `enviando`.
+  - `editar_diagnostico` (admin, hasta que haya entrega) guarda `informe_versiones` y envía `Informe de visita 012 v2 - ...pdf` (aviso `informe`, con correo).
+  - `Pendientes.jsx`: cotizaciones sin confirmar o sin oficial, arriba en Admin. `posibleCobroDoble`/`cobroDobleEnLineas` (`util.js`) avisan al técnico y al admin por "Daños severos" o "Rotura" junto al oficial.
+  - El scratchpad se vacía con el tiempo: los arneses de prueba (Node y Vite simulado) hay que rehacerlos.
 - Los `mailto:` de "Abrir correo" siguen: son para escribirle al cliente, y el PDF se adjunta a mano.
 - Al probar funciones que usan secuencias (cotizaciones, entregas, cuentas), restaurar con `setval` aunque se revierta.
 - Marca del cliente: Cprado2001 (datos en `src/lib/marca.js`; logo transparente como data URL en `src/lib/logo.js`,

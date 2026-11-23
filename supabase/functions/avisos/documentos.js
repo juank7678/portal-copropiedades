@@ -125,7 +125,7 @@ function despedida(c) {
 const salida = (c, nombre) => ({ nombre: `${nombreArchivo(nombre)}.pdf`, bytes: new Uint8Array(c.doc.output("arraybuffer")) });
 
 // Informe de visita: diagnóstico, fotos y recomendación, sin precios (modelo "INFORME DE VISITA R")
-export function cartaVisita(cot, cop, fotosVisita, marca) {
+export function cartaVisita(cot, cop, fotosVisita, marca, version = 1) {
   const c = nuevaCarta(marca);
   saludo(c, cot.creado_en, cop);
   const ubicacion = `Torre ${cot.torre}, piso ${cot.piso}`;
@@ -141,7 +141,7 @@ export function cartaVisita(cot, cop, fotosVisita, marca) {
   trabajos(c, cot.trabajos || cot.lineas);
   parrafo(c, `Referencia: cotización N.° ${numero(cot.numero)}. Visita realizada por ${cot.tecnico_nombre}.`, { tam: 9.5, justificar: false });
   despedida(c);
-  return salida(c, `Informe de visita ${numero(cot.numero)} - ${cop.nombre}`);
+  return salida(c, `Informe de visita ${numero(cot.numero)}${version > 1 ? ` v${version}` : ""} - ${cop.nombre}`);
 }
 
 function tablaValores(c, lineas, campo, pie) {
@@ -215,7 +215,7 @@ export function cartaEntrega(cot, ent, cop, antes, despues, marca) {
 }
 
 // Hoja de vida de la copropiedad (lo que se diligenció en el registro)
-export function cartaHojaVida(cop, tecnico, marca) {
+export function cartaHojaVida(cop, tecnico, marca, version = 1) {
   const c = nuevaCarta(marca);
   parrafo(c, fechaCarta(cop.creado_en), { justificar: false, despues: 18 });
   parrafo(c, `HOJA DE VIDA - ${cop.nombre} (${cop.anio})`, { negrita: true, justificar: false, despues: 12 });
@@ -226,5 +226,5 @@ export function cartaHojaVida(cop, tecnico, marca) {
       parrafo(c, k, { negrita: true, tam: 9.5, justificar: false, despues: 0 });
       parrafo(c, v || "-", { justificar: false, despues: 8 });
     });
-  return salida(c, `Hoja de vida - ${cop.nombre}`);
+  return salida(c, `Hoja de vida${version > 1 ? ` v${version}` : ""} - ${cop.nombre}`);
 }

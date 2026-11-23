@@ -11,6 +11,8 @@ import { CuentasCobro, DatosEmisor } from "./Cobros.jsx";
 import Nube from "./Nube.jsx";
 import CampoPassword from "./CampoPassword.jsx";
 import EditorCotizacion from "./EditorCotizacion.jsx";
+import EditorDiagnostico from "./EditorDiagnostico.jsx";
+import Pendientes from "./Pendientes.jsx";
 
 const firmar = async (bucket, paths) => {
   if (!paths.length) return {};
@@ -24,6 +26,9 @@ export default function PanelAdmin({ abrirId = null }) {
   const [fotosTec, setFotosTec] = useState({});
   const [copropiedades, setCopropiedades] = useState([]);
   const [seleccionId, setSeleccionId] = useState(abrirId);
+  const [abrirCot, setAbrirCot] = useState(null); // { id } de la visita que se abre desde Pendientes
+  const [revision, setRevision] = useState(0);
+  const alCambiar = useCallback(() => setRevision((n) => n + 1), []);
   const [error, setError] = useState("");
 
   const cargar = useCallback(async () => {
@@ -36,8 +41,9 @@ export default function PanelAdmin({ abrirId = null }) {
     setTecnicos(t.data.filter((x) => x.rol === "tecnico"));
     setOficiales(t.data.filter((x) => x.rol === "oficial"));
     setCopropiedades(c.data);
+    alCambiar();
     setFotosTec(await firmar("tecnicos", t.data.filter((x) => x.foto_path).map((x) => x.foto_path)));
-  }, []);
+  }, [alCambiar]);
 
   useEffect(() => { cargar(); }, [cargar]);
 
@@ -46,13 +52,16 @@ export default function PanelAdmin({ abrirId = null }) {
   return (
     <div>
       {error && <div style={card}><p style={errorText}>{error}</p></div>}
+      <Pendientes revision={revision} hayOficiales={oficiales.some((o) => o.activo)}
+        onRevisar={(copId, cotId) => { setSeleccionId(copId); setAbrirCot({ id: cotId }); }} />
       <Nube />
       <EnlaceRegistro />
       <DirectorioPersonal rol="tecnico" personas={tecnicos} fotos={fotosTec} recargar={cargar} />
       <DirectorioPersonal rol="oficial" personas={oficiales} fotos={fotosTec} recargar={cargar} />
       <Copropiedades copropiedades={copropiedades} tecnicos={tecnicos} recargar={cargar}
-        onVer={(id) => setSeleccionId(id)} />
-      {seleccion && <Historial seleccion={seleccion} tecnicos={tecnicos} oficiales={oficiales} onCerrar={() => setSeleccionId(null)} />}
+        onVer={(id) => { setSeleccionId(id); setAbrirCot(null); }} />
+      {seleccion && <Historial seleccion={seleccion} tecnicos={tecnicos} oficiales={oficiales} abrirCot={abrirCot} onCambio={alCambiar}
+        onCerrar={() => { setSeleccionId(null); setAbrirCot(null); }} />}
       <Precios />
       <PreciosAdmin />
       <DatosEmisor />
@@ -414,7 +423,7 @@ function OtrasFotos({ rutas, miniaturas }) {
 }
 
 // ---------- Historial de una copropiedad ----------
-function Historial({ seleccion, tecnicos, oficiales, onCerrar }) {
+function Historial({ seleccion, tecnicos, oficiales, abrirCot, onCambio, onCerrar }) {
   const [historial, setHistorial] = useState(null);
   const [clientes, setClientes] = useState({});
   const [entregas, setEntregas] = useState({});
@@ -424,8 +433,9 @@ function Historial({ seleccion, tecnicos, oficiales, onCerrar }) {
   const [error, setError] = useState("");
   const [ocupado, setOcupado] = useState(null);
   const ref = useRef(null);
+  const abierta = useRef(null); // última petición de Pendientes ya atendida
 
-  useEffect(() => { ref.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }, [seleccion.id]);
+  useEffect(() => { ref.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }, [seleccion.id, abrirCot]);
 
   const cargar = useCallback(async () => {
     const { data, error: err } = await supabase.from("cotizaciones").select("*").eq("copropiedad_id", seleccion.id).order("creado_en", { ascending: false });
@@ -442,19 +452,30 @@ function Historial({ seleccion, tecnicos, oficiales, onCerrar }) {
     setClientes(Object.fromEntries(cli.data.map((x) => [x.cotizacion_id, x])));
     setEntregas(Object.fromEntries(ent.data.map((x) => [x.cotizacion_id, x])));
     setCuentas(cc.data);
-  }, [seleccion.id]);
+    onCambio();
+  }, [seleccion.id, onCambio]);
 
   useEffect(() => { setHistorial(null); setAbiertoId(null); cargar(); }, [cargar]);
 
-  const abrir = async (h) => {
+  const verFotos = async (h) => {
+    const ent = entregas[h.id];
+    const urls = await firmar("visitas", [...h.fotos, ...h.fotos_extra, ...(ent?.fotos || []), ...(ent?.fotos_extra || [])]);
+    setMiniaturas((m) => ({ ...m, ...urls }));
+  };
+
+  const abrir = (h) => {
     const nuevo = abiertoId === h.id ? null : h.id;
     setAbiertoId(nuevo);
-    if (nuevo) {
-      const ent = entregas[h.id];
-      const urls = await firmar("visitas", [...h.fotos, ...h.fotos_extra, ...(ent?.fotos || []), ...(ent?.fotos_extra || [])]);
-      setMiniaturas((m) => ({ ...m, ...urls }));
-    }
+    if (nuevo) verFotos(h);
   };
+
+  useEffect(() => {
+    const h = abrirCot && abierta.current !== abrirCot && historial?.find((x) => x.id === abrirCot.id);
+    if (!h) return;
+    abierta.current = abrirCot;
+    setAbiertoId(h.id);
+    verFotos(h);
+  });
 
   const conFotos = (h) => fotosDe(h.fotos);
 
@@ -544,13 +565,8 @@ function Historial({ seleccion, tecnicos, oficiales, onCerrar }) {
                     : <div key={p} style={{ width: 70, height: 70, borderRadius: 6, background: "#eef0ec" }} />)}
                 </div>
                 <OtrasFotos rutas={h.fotos_extra} miniaturas={miniaturas} />
-                {cli && (
-                  <>
-                    {h.diagnostico && <p style={{ fontSize: 13, margin: "0 0 6px", whiteSpace: "pre-line" }}><b>Diagnóstico:</b> {h.diagnostico}</p>}
-                    {h.recomendacion && <p style={{ fontSize: 13, margin: "0 0 8px", whiteSpace: "pre-line" }}><b>Recomendación:</b> {h.recomendacion}</p>}
-                    <EditorCotizacion cot={h} cliente={cli} editable={estado === "cotizada"} onListo={cargar} />
-                  </>
-                )}
+                <EditorDiagnostico cot={h} editable={!ent} onListo={cargar} />
+                {cli && <EditorCotizacion cot={h} cliente={cli} editable={estado === "cotizada"} onListo={cargar} />}
                 {h.requiere_oficial && (
                   <div style={{ marginTop: 10, background: "#fff", border: "1px solid #e2e5e1", borderRadius: 8, padding: 10 }}>
                     <p style={{ fontSize: 12, fontWeight: 700, margin: "0 0 6px" }}>Oficial</p>

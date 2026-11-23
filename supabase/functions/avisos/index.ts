@@ -55,6 +55,7 @@ const carpetaCop = (c: { nombre: string; anio: number }) => `${c.nombre} (${c.an
 const carpetaVisita = (cop: any, cot: any) => [carpetaCop(cop), `Visita ${numero(cot.numero)} - ${fechaISO(cot.creado_en)}`];
 // deno-lint-ignore no-explicit-any
 const carpetaEntrega = (cop: any, cot: any, ent: any) => [...carpetaVisita(cop, cot), `Entrega ${numero(ent.numero)} - ${fechaISO(ent.fecha_entrega)}`];
+// Aparte de las carpetas de los clientes: así se pueden compartir sin mostrar lo que se paga al técnico
 const INTERNO = "Interno - no compartir";
 const pdf = (d: { nombre: string; bytes: Uint8Array }, adjuntar = true) => ({ nombre: d.nombre, mime: "application/pdf", bytes: d.bytes, adjuntar });
 
@@ -80,10 +81,6 @@ async function construir(aviso: any) {
         "El PDF adjunto es un ejemplo del informe con su membrete."),
       carpeta: ["Pruebas"],
       archivos: [pdf(cartaVisita(cot, cop, [], marca))],
-      adicionales: [{
-        carpeta: ["Pruebas", INTERNO],
-        archivos: [pdf(cartaCotizacionTecnico({ ...cot, total_tecnico: 0, lineas: [{ concepto: "Trabajo de ejemplo", cantidad: 1, valor_tecnico: 0 }] }, cop, marca), false)],
-      }],
     };
   }
 
@@ -102,12 +99,42 @@ async function construir(aviso: any) {
     };
   }
 
+  if (aviso.tipo === "hoja_vida") {
+    const { data: cop } = await sb.from("copropiedades").select("*").eq("id", aviso.ref_id).maybeSingle();
+    if (!cop) throw new Descartar("El registro ya no existe.");
+    const { data: tec } = cop.tecnico_id ? await sb.from("perfiles").select("nombre").eq("id", cop.tecnico_id).maybeSingle() : { data: null };
+    return { carpeta: [carpetaCop(cop)], archivos: [pdf(cartaHojaVida(cop, tec?.nombre, marca, aviso.progreso), false)] };
+  }
+
+  if (aviso.tipo === "interno") {
+    const { data: cot } = await sb.from("cotizaciones").select("*").eq("id", aviso.ref_id).maybeSingle();
+    if (!cot) throw new Descartar("La visita ya no existe.");
+    const { data: cop } = await sb.from("copropiedades").select("*").eq("id", cot.copropiedad_id).single();
+    return { carpeta: [INTERNO, carpetaCop(cop)], archivos: [pdf(cartaCotizacionTecnico(cot, cop, marca), false)] };
+  }
+
+  if (aviso.tipo === "informe") {
+    const { data: ver } = await sb.from("informe_versiones").select("*").eq("id", aviso.ref_id).maybeSingle();
+    if (!ver) throw new Descartar("El informe ya no existe.");
+    const { data: base } = await sb.from("cotizaciones").select("*").eq("id", ver.cotizacion_id).single();
+    const { data: cop } = await sb.from("copropiedades").select("*").eq("id", base.copropiedad_id).single();
+    const cot = { ...base, diagnostico: ver.diagnostico, recomendacion: ver.recomendacion };
+    return {
+      asunto: `Informe de visita N.° ${numero(cot.numero)} corregido - ${cot.copropiedad_nombre}`,
+      html: cuerpo(`Informe de visita N.° ${numero(cot.numero)} corregido`, [
+        ["Copropiedad", cot.copropiedad_nombre], ["Versión", ver.version], ["Diagnóstico", ver.diagnostico], ["Recomendación", ver.recomendacion],
+        ["Administrador", cop.administrador], ["Correo del cliente", cop.email],
+      ], "Adjunto: informe corregido. Usa este en lugar del anterior."),
+      carpeta: carpetaVisita(cop, cot),
+      archivos: [pdf(cartaVisita(cot, cop, await fotosDe(cot.fotos), marca, ver.version))],
+    };
+  }
+
   if (aviso.tipo === "visita") {
     const { data: cot } = await sb.from("cotizaciones").select("*").eq("id", aviso.ref_id).maybeSingle();
     if (!cot) throw new Descartar("La visita ya no existe.");
     const { data: cop } = await sb.from("copropiedades").select("*").eq("id", cot.copropiedad_id).single();
     const fotos = await fotosDe(cot.fotos);
-    const carpeta = carpetaVisita(cop, cot);
     return {
       asunto: `Visita N.° ${numero(cot.numero)} - ${cot.copropiedad_nombre}`,
       // Sin valores: la cotización al cliente sale en otro correo cuando el administrador la confirma
@@ -117,9 +144,8 @@ async function construir(aviso: any) {
         ["Requiere oficial", cot.requiere_oficial === true ? "Sí, falta asignarlo en el portal" : cot.requiere_oficial === false ? "No" : ""],
         ["Administrador", cop.administrador], ["Correo del cliente", cop.email],
       ], "Adjunto: informe de visita. Revisa y confirma la cotización en el portal para generar su PDF."),
-      carpeta,
+      carpeta: carpetaVisita(cop, cot),
       archivos: [pdf(cartaVisita(cot, cop, fotos, marca))],
-      adicionales: cot.lineas.length ? [{ carpeta: [...carpeta, INTERNO], archivos: [pdf(cartaCotizacionTecnico(cot, cop, marca), false)] }] : [],
     };
   }
 
@@ -228,15 +254,6 @@ async function publicar(cfg: any, aviso: any, m: any, conCorreo: boolean) {
   return r as { carpeta_url?: string; raiz_url?: string };
 }
 
-// El envío principal lleva el correo; los adicionales (carpeta interna) nunca lo llevan
-// deno-lint-ignore no-explicit-any
-async function enviar(aviso: any, cfg: any) {
-  const m = await construir(aviso);
-  const r = await publicar(cfg, aviso, m, aviso.con_correo);
-  for (const extra of m.adicionales || []) await publicar(cfg, aviso, extra, false);
-  return r;
-}
-
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json(405, { error: "Método no permitido" });
   const { data: cfg, error: errCfg } = await sb.from("ajustes_privados")
@@ -270,17 +287,18 @@ Deno.serve(async (req) => {
       }
       r = f.r;
     } else {
-      r = await enviar(aviso, cfg);
+      r = await publicar(cfg, aviso, await construir(aviso), aviso.con_correo);
     }
     const ahora = new Date().toISOString();
-    await sb.from("avisos").update({ estado: "enviado", error: "", carpeta_url: r.carpeta_url || "", enviado_en: ahora, actualizado_en: ahora }).eq("id", aviso.id);
+    // Si cambió mientras se enviaba (hoja de vida editada), la fila ya volvió a "pendiente" y se conserva así
+    await sb.from("avisos").update({ estado: "enviado", error: "", carpeta_url: r.carpeta_url || "", enviado_en: ahora, actualizado_en: ahora }).eq("id", aviso.id).eq("estado", "enviando");
     if (r.raiz_url) await sb.from("ajustes_privados").update({ avisos_carpeta_url: r.raiz_url }).eq("id", 1);
     return json(200, { ok: true });
   } catch (e) {
     const descartar = e instanceof Descartar;
     const mensaje = e instanceof Error ? e.message : String(e);
     console.error(aviso.id, mensaje);
-    await sb.from("avisos").update({ estado: descartar ? "descartado" : "error", error: mensaje.slice(0, 500), actualizado_en: new Date().toISOString() }).eq("id", aviso.id);
+    await sb.from("avisos").update({ estado: descartar ? "descartado" : "error", error: mensaje.slice(0, 500), actualizado_en: new Date().toISOString() }).eq("id", aviso.id).eq("estado", "enviando");
     return json(200, { ok: false, error: mensaje });
   }
 });

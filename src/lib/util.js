@@ -69,6 +69,23 @@ export function estadoCotizacion(cot, entrega, cuenta) {
   return cot.aprobada_en ? "aprobada" : "cotizada";
 }
 
+// Aviso cuando el oficial y la cotización pueden estar cobrando el mismo trabajo ("" si no hay coincidencia)
+export function posibleCobroDoble({ rotura, danos, actividades }) {
+  if (!actividades.length) return "";
+  if (danos) return 'Se cobra "Daños severos" y también actividades del oficial. Revisa que no sea el mismo trabajo cobrado dos veces.';
+  if (rotura && actividades.some((a) => /romp|rotura|demol|muro/i.test(a))) {
+    return 'Se cobra "Rotura" y el oficial también tiene una actividad de rotura. Revisa que no sea el mismo trabajo cobrado dos veces.';
+  }
+  return "";
+}
+
+// Lo mismo, a partir de las líneas de la cotización del cliente
+export const cobroDobleEnLineas = (lineas) => posibleCobroDoble({
+  rotura: lineas.some((l) => l.origen !== "oficial" && /^rotura/i.test(l.concepto)),
+  danos: lineas.some((l) => l.origen !== "oficial" && /^daños severos/i.test(l.concepto)),
+  actividades: lineas.filter((l) => l.origen === "oficial").map((l) => l.concepto),
+});
+
 export const TORRES = Array.from({ length: 50 }, (_, i) => i + 1);
 // Los pisos 90-99 van primero (así los numera el cliente) y luego 1-50
 export const PISOS = [...Array.from({ length: 10 }, (_, i) => 90 + i), ...TORRES];

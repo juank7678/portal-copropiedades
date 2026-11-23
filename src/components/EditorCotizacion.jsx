@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { mensajeError, supabase } from "../lib/supabase.js";
-import { cop, fechaHoraCO, numeroCot } from "../lib/util.js";
+import { cobroDobleEnLineas, cop, fechaHoraCO, numeroCot } from "../lib/util.js";
 import { btnGhost, btnPrimary, disabled, errorText, input, muted, smallLabel } from "../styles.js";
 import { TablaLineas } from "./PanelTecnico.jsx";
 
@@ -39,8 +39,10 @@ export default function EditorCotizacion({ cot, cliente, editable, onListo }) {
   const valorDescuento = Math.round((subtotal * descuento) / 100);
   const validas = filas.length > 0 && subtotal > 0 && filas.every((f) => f.concepto.trim() && Number(f.cantidad) >= 1);
 
+  const doble = cobroDobleEnLineas(editando ? filas : cliente.lineas);
+
   const confirmar = async () => {
-    if (!window.confirm(`Se confirmará la cotización N.° ${numeroCot(cot.numero)} por ${cop(subtotal - valorDescuento)}. Se generará su PDF y se enviará a la carpeta de Drive y a tu correo. ¿Continuar?`)) return;
+    if (!window.confirm(`${doble ? `${doble}\n\n` : ""}Se confirmará la cotización N.° ${numeroCot(cot.numero)} por ${cop(subtotal - valorDescuento)}. Se generará su PDF y se enviará a la carpeta de Drive y a tu correo. ¿Continuar?`)) return;
     setGuardando(true);
     setError("");
     const { error: err } = await supabase.rpc("confirmar_cotizacion", {
@@ -65,6 +67,7 @@ export default function EditorCotizacion({ cot, cliente, editable, onListo }) {
         </span>
       </div>
 
+      {doble && editable && <p style={{ fontSize: 13, color: "#a15b2b", background: "#faeeda", borderRadius: 8, padding: 8, margin: "0 0 8px" }}>⚠ {doble}</p>}
       {!editando && (
         <>
           <TablaLineas lineas={cliente.lineas} campo="valor_cliente" total={cliente.total_cliente} etiquetaTotal="Total cliente"
